@@ -4,6 +4,9 @@ libreoffice-wrapper
 
 Manipulate libreoffice programs (Writer, Calc, etc...) via python. The document is updated real time (no need to reload).
 
+- Tested on Linux (Ubuntu 20.04)
+- Not tested on windows or mac yet
+
 The principle of this module is to use tmux to intermediate communication between a python instance and the libreoffice's internal python interpreter. This way your are not limited to the functionality of libreoffice's internal python.
 
 Still in development. Let me know if you wanna help!
