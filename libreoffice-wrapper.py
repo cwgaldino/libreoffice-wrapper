@@ -254,6 +254,7 @@ def transpose(l):
     except ValueError:
         return [[x] for x in l]
 
+
 class soffice():
 
     def __init__(self, tmux_config=True, port=8100, folder='/opt/libreoffice7.0'):
@@ -307,23 +308,35 @@ class soffice():
         self.tmux_pane.send_keys(f"""try: exec(\"import traceback\")""" + '\n'\
                           """except Exception as e: print(e)""" + '\n'
                           , enter=True, suppress_history=False)
-        time.sleep(0.1)
-        self.write("import uno")
-        time.sleep(0.1)
-        self.write("from com.sun.star.beans import PropertyValue")
+        start_time = time.time()
+        while time.time() < start_time + 10:
+            if self.check_running():
+                pass
+            else:
+                break
+        self.write(f"""import uno\n"""+\
+                   f"""from com.sun.star.beans import PropertyValue\n"""
+                   )
         time.sleep(0.1)
         print('done')
 
         # initialize communication
         print('Initializing comunications (it may take a few moments.)')
-        self.write("local = uno.getComponentContext()")
+        self.write(f"""local = uno.getComponentContext()\n""" +\
+                   f"""resolver = local.ServiceManager.createInstanceWithContext("com.sun.star.bridge.UnoUrlResolver", local)\n""" +\
+                   f"""context = resolver.resolve("uno:socket,host=localhost,port={port};urp;StarOffice.ComponentContext")\n""" +\
+                   f"""desktop = context.ServiceManager.createInstanceWithContext('com.sun.star.frame.Desktop', context)\n"""
+                   )
         time.sleep(0.1)
-        self.write("""resolver = local.ServiceManager.createInstanceWithContext("com.sun.star.bridge.UnoUrlResolver", local)""")
-        time.sleep(0.1)
-        self.write(f"""context = resolver.resolve("uno:socket,host=localhost,port={port};urp;StarOffice.ComponentContext")""")
-        time.sleep(0.1)
-        self.write("desktop = context.ServiceManager.createInstanceWithContext('com.sun.star.frame.Desktop', context)")
-        time.sleep(0.1)
+
+        # self.write("local = uno.getComponentContext()")
+        # time.sleep(0.1)
+        # self.write("""resolver = local.ServiceManager.createInstanceWithContext("com.sun.star.bridge.UnoUrlResolver", local)""")
+        # time.sleep(0.1)
+        # self.write(f"""context = resolver.resolve("uno:socket,host=localhost,port={port};urp;StarOffice.ComponentContext")""")
+        # time.sleep(0.1)
+        # self.write("desktop = context.ServiceManager.createInstanceWithContext('com.sun.star.frame.Desktop', context)")
+        # time.sleep(0.1)
         try:
             self._get_tag()
         except soffice_python_error:
@@ -598,7 +611,7 @@ class Calc():
         self.sheet_tags = []
         self.filepath = self.get_filepath()
 
-        self.write(f"""def get_property_recursively(tag, column, row, name, attrs=[]):\n""" +\
+        self.write(f"""def get_cell_property_recursively(tag, column, row, name, attrs=[]):\n""" +\
                    f"""    f = dict()\n""" +\
                    f"""    sheet = eval(f"sheet_{{tag}}")\n""" +\
                    f"""    i = [x.Name for x in sheet.getCellByPosition(column, row).getPropertySetInfo().Properties].index(name)\n""" +\
@@ -625,8 +638,44 @@ class Calc():
                    # f"""            print(t)\n""" +\
                    f"""            return eval(f"sheet.getCellByPosition(column, row).getPropertyValue(name).{{t[:-1]}}")\n""" +\
                    f"""    for key in keys:\n""" +\
-                   f"""        f[key] = get_property_recursively(tag, column, row, name, attrs+[key])\n""" +\
+                   f"""        f[key] = get_cell_property_recursively(tag, column, row, name, attrs+[key])\n""" +\
                    f"""    return f""")
+
+
+        self.write(f"""def get_cells_property_recursively(tag, column_start, row_start, column_stop, row_stop, name, attrs=[]):\n""" +\
+                   f"""    f = dict()\n""" +\
+                   f"""    sheet = eval(f"sheet_{{tag}}")\n""" +\
+                   f"""    i = [x.Name for x in sheet.getCellRangeByPosition(column_start, row_start, column_stop, row_stop).getPropertySetInfo().Properties].index(name)\n""" +\
+                   f"""    if attrs == []:\n""" +\
+                   f"""        try:\n""" +\
+                   f"""            if type(sheet.getCellRangeByPosition(column_start, row_start, column_stop, row_stop).getPropertyValue(name).value) is int:\n""" +\
+                   f"""                return sheet.getCellRangeByPosition(column_start, row_start, column_stop, row_stop).getPropertyValue(name).value\n""" +\
+                   f"""            elif type(sheet.getCellRangeByPosition(column_start, row_start, column_stop, row_stop).getPropertyValue(name).value) is str:\n""" +\
+                   f"""                return sheet.getCellRangeByPosition(column_start, row_start, column_stop, row_stop).getPropertyValue(name).value\n""" +\
+                   f"""            else:\n""" +\
+                   f"""                keys = sheet.getCellRangeByPosition(column_start, row_start, column_stop, row_stop).getPropertyValue(name).value.__dir__()\n""" +\
+                   f"""        except AttributeError:\n""" +\
+                   f"""            return sheet.getCellRangeByPosition(column_start, row_start, column_stop, row_stop).getPropertyValue(name)\n""" +\
+                   f"""    else:\n""" +\
+                   f"""        try:\n""" +\
+                   f"""            t = ''\n""" +\
+                   f"""            for attr in attrs:\n""" +\
+                   f"""                t += f"__getattr__('{{attr}}')."\n""" +\
+                   f"""            if type(eval(f"sheet.getCellRangeByPosition(column_start, row_start, column_stop, row_stop).getPropertyValue(name).{{t}}value")) is str:\n""" +\
+                   f"""                return eval(f"sheet.getCellRangeByPosition(column_start, row_start, column_stop, row_stop).getPropertyValue(name).{{t}}value")\n""" +\
+                   f"""            else:\n""" +\
+                   f"""                keys = eval(f"sheet.getCellRangeByPosition(column_start, row_start, column_stop, row_stop).getPropertyValue(name).{{t}}value.__dir__()")\n""" +\
+                   f"""        except AttributeError:\n""" +\
+                   # f"""            print(t)\n""" +\
+                   f"""            return eval(f"sheet.getCellRangeByPosition(column_start, row_start, column_stop, row_stop).getPropertyValue(name).{{t[:-1]}}")\n""" +\
+                   f"""    for key in keys:\n""" +\
+                   f"""        f[key] = get_cells_property_recursively(tag, column_start, row_start, column_stop, row_stop, name, attrs+[key])\n""" +\
+                   f"""    return f""")
+
+        self.write(f"""from com.sun.star.table import TableBorder, BorderLine2, ShadowFormat\n""" +\
+                  f"""from com.sun.star.awt import Size, Point\n""" +\
+                  f"""from com.sun.star.lang import Locale\n""" +\
+                  f"""from com.sun.star.util import CellProtection""")
 
     def write(self, string, timeout=10):
         return self.soffice.write(string=string, timeout=timeout)
@@ -755,6 +804,56 @@ class Calc():
         name = self.get_sheet_name_by_position(position)
         return self.get_sheet(name)
 
+    def get_styles(self):
+        return self.write(f"""print([x.Name for x in document_{self.tag}.getStyleFamilies()['CellStyles']])""")[0]
+
+    def remove_style(self, name):
+        if name in self.get_styles():
+            self.write(f"""document_{self.tag}.getStyleFamilies()['CellStyles'].removeByName('{name}')""")
+        else:
+            raise valueError(f'{name} is not a style')
+
+    def new_style(self, name, properties, overwrite=False):
+        """
+        name = 'MyStyle'
+        overwrite = True
+        properties = {'CellBackColor':-1, 'TopBorder':{'Color':16776960}}
+        """
+
+        keys_string = 'keys = ('
+        values_string = 'values = ('
+        for name0 in properties:
+            keys_string += "'" + name0 +"', "
+            sheet = self.get_sheet_by_position(0)
+            func = sheet._get_function(0, 0, name0)
+            if func is not None:
+                if isinstance(properties[name0], dict):
+                    d = sheet.get_cell_property(0, 0, name0)
+                    for k, v in properties[name0].items():
+                        if k in d:
+                            d[k] = v
+                        else:
+                            raise ValueError(f'{k} is not a valid option of {name0}.')
+                    f_string = f"{func}(" + ','.join([f"{k}={v}" for k, v in d.items()]) + ")"
+                    values_string += f_string +', '
+
+                else:
+                    raise ValueError(f'property for {name0} must e a dict')
+            else:
+                values_string += str(properties[name0]) +', '
+
+        sheet.write(f'del sheet_{sheet_tag}')
+        if name in self.get_styles():
+            if overwrite:
+                self.remove_style(name)
+            else:
+                raise valueError(f'{name} already exists')
+
+        self.write(f"""new_style = document_{self.tag}.createInstance('com.sun.star.style.CellStyle')\n"""+\
+                f"""document_{self.tag}.getStyleFamilies()['CellStyles'].insertByName('{name}', new_style)\n"""+\
+                f"""{keys_string[:-2]})\n"""+\
+                f"""{values_string[:-2]})\n"""+
+                f"""new_style.setPropertyValues(keys, values)""")
 
 class SheetNameExistError(Exception):
 
@@ -795,6 +894,13 @@ class Sheet():
 
     def isVisible(self):
         return str2bool(self.write(f"print(sheet_{self.tag}.IsVisible)")[0])
+
+    def move(self, position):
+        self.Calc.move_sheet(self.get_name(), position)
+
+    def remove(self):
+        self.write(f'del sheet_{self.tag}')
+        self.Calc.remove_sheet(self.get_name())
 
     def get_last_row(self):
         """starts from 0"""
@@ -849,21 +955,56 @@ class Sheet():
                 return lr+1
 
     def set_column_width(self, column, width):
-        column = _check_column_value(column)
-        if width < 0:
-            raise ValueError('width cannot be negative')
-        self.write(f"sheet_{self.tag}.getColumns()[{column}].setPropertyValue('Width', {width})")
+        """column can be single value or list
+        width can be single value or list
+        """
+        if isinstance(column, list) or isinstance(column, tuple):
+            column = [_check_column_value(column) for c in column]
+            if isinstance(width, list) or isinstance(width, tuple):
+                if len(column) != len(width):
+                    raise ValueError("Width and column must be the same lenght.")
+                for h in width:
+                    if h < 0:
+                        raise ValueError('width cannot be negative')
+            else:
+                if width < 0:
+                    raise ValueError('width cannot be negative')
+                width = [width]*len(column)
+            self.write(f"""for r, h in zip({column}, {width}):\n"""+\
+                       f"""    sheet_{self.tag}.getColumns()[r].setPropertyValue('Width', h)""")
+        else:
+            column = _check_row_value(column)
+            if width < 0:
+                raise ValueError('width cannot be negative')
+            self.write(f"sheet_{self.tag}.getColumns()[{column}].setPropertyValue('Width', {width})")
 
     def get_column_width(self, column):
         column = _check_column_value(column)
         return int(self.write(f"print(sheet_{self.tag}.getColumns()[{column}].Width)")[0])
 
     def set_row_height(self, row, height):
-        row = _check_row_value(row)
-        if height < 0:
-            raise ValueError('height cannot be negative')
-
-        self.write(f"sheet_{self.tag}.getRows()[{row}].setPropertyValue('Height', {height})")
+        """row can be single value or list
+        height can be single value or list
+        """
+        if isinstance(row, list) or isinstance(row, tuple):
+            row = [_check_row_value(r) for r in row]
+            if isinstance(height, list) or isinstance(height, tuple):
+                if len(row) != len(height):
+                    raise ValueError("Height and row must be the same lenght.")
+                for h in height:
+                    if h < 0:
+                        raise ValueError('height cannot be negative')
+            else:
+                if height < 0:
+                    raise ValueError('height cannot be negative')
+                height = [height]*len(row)
+            self.write(f"""for r, h in zip({row}, {height}):\n"""+\
+                       f"""    sheet_{self.tag}.getRows()[r].setPropertyValue('Height', h)""")
+        else:
+            row = _check_row_value(row)
+            if height < 0:
+                raise ValueError('height cannot be negative')
+            self.write(f"sheet_{self.tag}.getRows()[{row}].setPropertyValue('Height', {height})")
 
     def get_row_height(self, row):
         row = _check_row_value(row)
@@ -1480,10 +1621,28 @@ class Sheet():
         else:
             raise valueError('Missing inputs')
 
+        if 'column' in kwargs:
+            column = kwargs['column']
+        if 'row' in kwargs:
+            row = kwargs['row']
+        if 'cell' in kwargs:
+            column, row = cell2num(kwargs['cell'])
+
         column = _check_column_value(column)
         row = _check_row_value(row)
 
         return eval(self.write(f"print([x.Name for x in sheet_{self.tag}.getCellByPosition({column}, {row}).getPropertySetInfo().Properties])")[0])
+
+    def _get_function(self, column, row, name):
+
+        string = self.write(f"print(sheet_{self.tag}.getCellByPosition({column}, {row}).getPropertyValue('{name}'))")
+
+        if len(string) > 0:
+            if '{' in string[0]:
+                return string[0].split('{')[0][1:-1].split('.')[-1]
+            else: return None
+        else:
+            return None
 
     def _get_property_recursive_old(self, column, row, name, attrs=[]):
 
@@ -1547,6 +1706,70 @@ class Sheet():
             f[key] = self._get_property_recursive_old(column, row, name, attrs+[key])
         return f
 
+    def set_cell_property(self, *args, **kwargs):
+        if len(args) == 3:
+            column, row = cell2num(args[0])
+            name = args[1]
+            value = args[2]
+        elif len(args) == 4:
+            column = args[0]
+            row = args[1]
+            name = args[2]
+            value = args[3]
+
+        if 'column' in kwargs:
+            column = kwargs['column']
+        if 'row' in kwargs:
+            row = kwargs['row']
+        if 'cell' in kwargs:
+            column, row = cell2num(kwargs['cell'])
+        if 'value' in kwargs:
+            value = kwargs['value']
+        if 'name' in kwargs:
+            value = kwargs['name']
+
+        column = _check_column_value(column)
+        row = _check_row_value(row)
+
+        if '.' not in name:
+
+            if isinstance(value, list) or isinstance(value, np.ndarray):
+                raise ValueError(f'Property ({name}) seems to be simple valued, but new value ({value}) seems to be a list/array/dict.')
+            elif isinstance(value, dict):
+                d = self.get_cell_property(column, row, name)
+                for k, v in value.items():
+                    if k in d:
+                        d[k] = v
+                    else:
+                        raise ValueError(f'{k} is not a valid option of {name}.')
+
+                func = self._get_function(column, row, name)
+                f_string = f"{func}(" + ','.join([f"{k}={v}" for k, v in d.items()]) + ")"
+                self.write(f"sheet_{self.tag}.getCellByPosition({column}, {row}).setPropertyValue('{name}', {f_string})")
+            else:
+                self.write(f"sheet_{self.tag}.getCellByPosition({column}, {row}).setPropertyValue('{name}', {value})")
+
+
+        elif name.count('.') == 1:
+            name0 = name.split('.')[0]
+            name1 = name.split('.')[1]
+
+            func = self._get_function(column, row, name0)
+
+            if func is None:
+                raise ValueError(f'Property name ({name}) seems to be a nested property but actual property is not nested.')
+            else:
+                d = self.get_cell_property(column, row, name0)
+                if name1 in d:
+                    d[name1] = value
+                else:
+                    raise ValueError(f'{name1} is not a valid option of {name0}.')
+
+                f_string = f"{func}(" + ','.join([f"{k}={v}" for k, v in d.items()]) + ")"
+                self.write(f"sheet_{self.tag}.getCellByPosition({column}, {row}).setPropertyValue('{name0}', {f_string})")
+        else:
+            raise ValueError(f'Only single nested properties can be edited. Note that complex properties can always be edited through other simple nested properties.')
+
     def get_cell_property(self, *args, **kwargs):
         """
         cannot get values from here:
@@ -1568,12 +1791,21 @@ class Sheet():
             row = args[1]
             name = args[2]
 
+        if 'column' in kwargs:
+            column = kwargs['column']
+        if 'row' in kwargs:
+            row = kwargs['row']
+        if 'cell' in kwargs:
+            column, row = cell2num(kwargs['cell'])
+        if 'name' in kwargs:
+            value = kwargs['name']
+
         column = _check_column_value(column)
         row = _check_row_value(row)
 
-        t = self.write(f"print(type(get_property_recursively({self.tag}, {column}, {row}, '{name}')))")[0]
+        t = self.write(f"print(type(get_cell_property_recursively({self.tag}, {column}, {row}, '{name}')))")[0]
         try:
-            output = self.write(f"print(get_property_recursively({self.tag}, {column}, {row}, '{name}'))")[0]
+            output = self.write(f"print(get_cell_property_recursively({self.tag}, {column}, {row}, '{name}'))")[0]
         except IndexError:
             return None
 
@@ -1586,26 +1818,366 @@ class Sheet():
         else:
             return output
 
+    def set_cells_property(self, *args, **kwargs):
+        column_start = 0
+        row_start    = 0
+
+        if len(args) == 3:
+            try:
+                column_start, row_start = cell2num(args[0])
+                name = args[1]
+                value = args[2]
+            except ValueError:
+                column_start, row_start, column_stop, row_stop = range2num(args[0])
+                name = args[1]
+                value = args[2]
+        elif len(args) == 4:
+            try:
+                column_start, row_start = cell2num(args[0])
+                column_stop, row_stop   = cell2num(args[1])
+                name = args[2]
+                value = args[3]
+            except AttributeError:
+                column_start = args[0]
+                row_start    = args[1]
+                name = args[2]
+                value = args[3]
+        # elif len(args) == 4:
+        #     column_start = args[0]
+        #     row_start    = args[1]
+        #     column_stop  = args[2]
+        #     row_stop     = args[3]
+        elif len(args) == 6:
+            column_start = args[0]
+            row_start    = args[1]
+            column_stop  = args[2]
+            row_stop     = args[3]
+            name = args[4]
+            value = args[5]
 
 
+        if 'column_start' in kwargs:
+            column_start = kwargs['column_start']
+        if 'row_start' in kwargs:
+            row_start = kwargs['row_start']
+        if 'column_stop' in kwargs:
+            column_stop = kwargs['column_stop']
+        if 'row_stop' in kwargs:
+            row_stop = kwargs['row_stop']
+        if 'cell_start' in kwargs:
+            column_start, row_start = cell2num(kwargs['cell_start'])
+        if 'cell_stop' in kwargs:
+            column_stop, row_stop = cell2num(kwargs['cell_stop'])
+        if 'range' in kwargs:
+            column_start, row_start, column_stop, row_stop = range2num(kwargs['range'])
+        if 'name' in kwargs:
+            name = kwargs['name']
+        if 'value' in kwargs:
+            value = kwargs['value']
+
+        row_start = _check_row_value(row_start)
+        column_start = _check_column_value(column_start)
+        try:
+            row_stop = _check_row_value(row_stop)
+        except NameError:
+            row_stop     = self.get_last_row()
+        try:
+            column_stop = _check_column_value(column_stop)
+        except NameError:
+            column_stop  = self.get_last_column()
+
+        if column_stop < column_start:
+            raise ValueError(f'column_start ({column_start}) cannot be bigger than column_stop ({column_stop})')
+        if row_stop < row_start:
+            raise ValueError(f'row_start ({row_start}) cannot be bigger than row_stop ({row_stop})')
+
+        if '.' not in name:
+
+            if isinstance(value, list) or isinstance(value, np.ndarray):
+                raise ValueError(f'Property ({name}) seems to be simple valued, but new value ({value}) seems to be a list/array/dict.')
+            elif isinstance(value, dict):
+                d = self.get_cell_property(column, row, name)
+                for k, v in value.items():
+                    if k in d:
+                        d[k] = v
+                    else:
+                        raise ValueError(f'{k} is not a valid option of {name}.')
+
+                func = self._get_function(column, row, name)
+                f_string = f"{func}(" + ','.join([f"{k}={v}" for k, v in d.items()]) + ")"
+                self.write(f"sheet_{self.tag}.getCellRangeByPosition({column_start}, {row_start}, {column_stop}, {row_stop}).setPropertyValue('{name}', {f_string})")
+            else:
+                self.write(f"sheet_{self.tag}.getCellRangeByPosition({column_start}, {row_start}, {column_stop}, {row_stop}).setPropertyValue('{name}', {value})")
 
 
-    def set_cell_property(self, *args, **kwargs):
+        elif name.count('.') == 1:
+            name0 = name.split('.')[0]
+            name1 = name.split('.')[1]
+
+            func = self._get_function(column, row, name0)
+
+            if func is None:
+                raise ValueError(f'Property name ({name}) seems to be a nested property but actual property is not nested.')
+            else:
+                d = self.get_cell_property(column, row, name0)
+                if name1 in d:
+                    d[name1] = value
+                else:
+                    raise ValueError(f'{name1} is not a valid option of {name0}.')
+
+                f_string = f"{func}(" + ','.join([f"{k}={v}" for k, v in d.items()]) + ")"
+                self.write(f"sheet_{self.tag}.getCellRangeByPosition({column_start}, {row_start}, {column_stop}, {row_stop}).setPropertyValue('{name0}', {f_string})")
+        else:
+            raise ValueError(f'Only single nested properties can be edited. Note that complex properties can always be edited through other simple nested properties.')
+
+    def get_cells_property(self, *args, **kwargs):
+        """
+        cannot get values from here:
+
+        UserDefinedAttributes
+        NumberingRules
+        Validation
+        ValidationLocal
+        ValidationXML
+        ConditionalFormat
+        ConditionalFormatLocal
+        ConditionalFormatXML
+        """
+        column_start = 0
+        row_start    = 0
+
         if len(args) == 2:
-            column, row = cell2num(args[0])
-            name = args[1]
-            value = args[2]
+            try:
+                column_start, row_start = cell2num(args[0])
+                name = args[1]
+            except ValueError:
+                column_start, row_start, column_stop, row_stop = range2num(args[0])
+                name = args[1]
+
         elif len(args) == 3:
-            column = args[0]
-            row = args[1]
-            name = args[2]
-            value = args[3]
+            try:
+                column_start, row_start = cell2num(args[0])
+                column_stop, row_stop   = cell2num(args[1])
+                name = args[2]
+            except AttributeError:
+                column_start = args[0]
+                row_start    = args[1]
+                name = args[2]
+        # elif len(args) == 4:
+        #     column_start = args[0]
+        #     row_start    = args[1]
+        #     column_stop  = args[2]
+        #     row_stop     = args[3]
+        elif len(args) == 5:
+            column_start = args[0]
+            row_start    = args[1]
+            column_stop  = args[2]
+            row_stop     = args[3]
+            name = args[4]
 
 
-        column = _check_column_value(column)
-        row = _check_row_value(row)
+        if 'column_start' in kwargs:
+            column_start = kwargs['column_start']
+        if 'row_start' in kwargs:
+            row_start = kwargs['row_start']
+        if 'column_stop' in kwargs:
+            column_stop = kwargs['column_stop']
+        if 'row_stop' in kwargs:
+            row_stop = kwargs['row_stop']
+        if 'cell_start' in kwargs:
+            column_start, row_start = cell2num(kwargs['cell_start'])
+        if 'cell_stop' in kwargs:
+            column_stop, row_stop = cell2num(kwargs['cell_stop'])
+        if 'range' in kwargs:
+            column_start, row_start, column_stop, row_stop = range2num(kwargs['range'])
+        if 'name' in kwargs:
+            name = kwargs['name']
 
-        return self._get_property_recursive(column, row, name)
+        row_start = _check_row_value(row_start)
+        column_start = _check_column_value(column_start)
+        try:
+            row_stop = _check_row_value(row_stop)
+        except NameError:
+            row_stop     = self.get_last_row()
+        try:
+            column_stop = _check_column_value(column_stop)
+        except NameError:
+            column_stop  = self.get_last_column()
+
+        if column_stop < column_start:
+            raise ValueError(f'column_start ({column_start}) cannot be bigger than column_stop ({column_stop})')
+        if row_stop < row_start:
+            raise ValueError(f'row_start ({row_start}) cannot be bigger than row_stop ({row_stop})')
+
+        t = self.write(f"print(type(get_cells_property_recursively({self.tag}, {column_start}, {row_start}, {column_stop}, {row_stop}, '{name}')))")[0]
+        try:
+            output = self.write(f"print(get_cells_property_recursively({self.tag}, {column_start}, {row_start}, {column_stop}, {row_stop}, '{name}'))")[0]
+        except IndexError:
+            return None
+
+        if  t == "<class 'int'>" :
+            return int(output)
+        elif t == "<class 'bool'>" :
+            return str2bool(output)
+        elif t == "<class 'dict'>":
+            return eval(output)
+        else:
+            return output
+
+    def merge(self, *args, **kwargs):
+        if len(args) == 1:
+            column_start, row_start, column_stop, row_stop = range2num(args[0])
+        elif len(args) == 2:
+                column_start, row_start = cell2num(args[0])
+                column_stop, row_stop   = cell2num(args[1])
+        elif len(args) == 4:
+            column_start = args[0]
+            row_start    = args[1]
+            column_stop  = args[2]
+            row_stop     = args[3]
+
+        if 'column_start' in kwargs:
+            column_start = kwargs['column_start']
+        if 'row_start' in kwargs:
+            row_start = kwargs['row_start']
+        if 'column_stop' in kwargs:
+            column_stop = kwargs['column_stop']
+        if 'row_stop' in kwargs:
+            row_stop = kwargs['row_stop']
+        if 'cell_start' in kwargs:
+            column_start, row_start = cell2num(kwargs['cell_start'])
+        if 'cell_stop' in kwargs:
+            column_stop, row_stop = cell2num(kwargs['cell_stop'])
+        if 'range' in kwargs:
+            column_start, row_start, column_stop, row_stop = range2num(kwargs['range'])
+
+        row_start    = _check_row_value(row_start)
+        column_start = _check_column_value(column_start)
+        column_stop  = _check_column_value(column_stop)
+        row_stop     = _check_row_value(row_stop)
+
+        if column_stop < column_start:
+            raise ValueError(f'column_start ({column_start}) cannot be bigger than column_stop ({column_stop})')
+        if row_stop < row_start:
+            raise ValueError(f'row_start ({row_start}) cannot be bigger than row_stop ({row_stop})')
+
+        self.write(f"sheet_{self.tag}.getCellRangeByPosition({column_start}, {row_start}, {column_stop}, {row_stop}).merge(True)")
+
+    def unmerge(self, *args, **kwargs):
+        if len(args) == 1:
+            column_start, row_start, column_stop, row_stop = range2num(args[0])
+        elif len(args) == 2:
+                column_start, row_start = cell2num(args[0])
+                column_stop, row_stop   = cell2num(args[1])
+        elif len(args) == 4:
+            column_start = args[0]
+            row_start    = args[1]
+            column_stop  = args[2]
+            row_stop     = args[3]
+
+        if 'column_start' in kwargs:
+            column_start = kwargs['column_start']
+        if 'row_start' in kwargs:
+            row_start = kwargs['row_start']
+        if 'column_stop' in kwargs:
+            column_stop = kwargs['column_stop']
+        if 'row_stop' in kwargs:
+            row_stop = kwargs['row_stop']
+        if 'cell_start' in kwargs:
+            column_start, row_start = cell2num(kwargs['cell_start'])
+        if 'cell_stop' in kwargs:
+            column_stop, row_stop = cell2num(kwargs['cell_stop'])
+        if 'range' in kwargs:
+            column_start, row_start, column_stop, row_stop = range2num(kwargs['range'])
+
+        row_start    = _check_row_value(row_start)
+        column_start = _check_column_value(column_start)
+        column_stop  = _check_column_value(column_stop)
+        row_stop     = _check_row_value(row_stop)
+
+        if column_stop < column_start:
+            raise ValueError(f'column_start ({column_start}) cannot be bigger than column_stop ({column_stop})')
+        if row_stop < row_start:
+            raise ValueError(f'row_start ({row_start}) cannot be bigger than row_stop ({row_stop})')
+
+        self.write(f"sheet_{self.tag}.getCellRangeByPosition({column_start}, {row_start}, {column_stop}, {row_stop}).merge(False)")
+
+
+name = 'CellBackColor'
+name = 'TopBorder'
+sheet.write(f"print(get_cells_property_recursively({sheet.tag}, 0, 0, 5, 5, '{name}'))")
+sheet.set_cells_property(0, 0, 5, 5, name, -1)
+
+
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').__dir__())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getCount())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').addNew())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').removeByIndex())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').clear())")
+
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getByIndex(0).__dir__())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getByIndex(0).getOperator())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getByIndex(0).setOperator())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getByIndex(0).getFormula1())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getByIndex(0).setFormula1())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getByIndex(0).getFormula2())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getByIndex(0).setFormula2())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getByIndex(0).getSourcePosition())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getByIndex(0).setSourcePosition())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getByIndex(0).getConditionOperator())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getByIndex(0).setConditionOperator())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getByIndex(0).getStyleName())")
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getByIndex(0).setStyleName())")
+
+
+
+
+
+
+
+sheet.write(f"print(sheet_{sheet.tag}.getCellByPosition(1, 1).getPropertyValue('ConditionalFormat').getByIndex(0).setStyleName())")
+
+
+# %%
+sheet = c.get_sheet_by_position(0)
+sheet.set_row_height([0, 1, 2, 3, 4, 5, 6, 7,8 , 9], [10, 20, 30, 40, 500, 60, 70, 80, 90, 20])
+sheet.cell_properties(1, 1)
+
+sheet.get_cell_property(2, 2, 'CellBackColor')
+sheet.set_cell_property(5, 5, 'CellBackColor', 16776960)
+sheet.get_cell_property(2, 2, 'CellBackColor')
+
+
+sheet.get_cell_property(2, 2, 'TopBorder')
+sheet.set_cell_property(2, 2, 'TopBorder.LineWidth', 10)
+sheet.get_cell_property(2, 2, 'TopBorder')
+
+d = sheet.get_cell_property(5, 5, 'TopBorder')
+d['LineWidth'] = 7
+sheet.set_cell_property(5, 5, 'TopBorder', d)
+sheet.get_cell_property(5, 5, 'TopBorder')
+
+
+# %%
+p = start_soffice()
+s = soffice()
+# %%
+c = s.Calc()
+# c = s.Calc(filepath='/home/galdino/github/pycalc/dddd.ods')
+# c = s.Calc(new_file=True)
+# %%
+sheet = c.get_sheet_by_position(0)
+# %%
+c.close()
+kill(p)
+s.kill()
+kill_tmux()
+
+
+
+# %%
+
+# %%
 
 
 
@@ -1636,171 +2208,3 @@ sheet.write(f"sheet_{sheet.tag}.getCellByPosition({column}, {row}).setPropertyVa
 
 
 # %%
-
-
-
-
-
-    def get_cells_properties(self, property, row_start, col_start, row_stop, col_stop):
-        row_start = _check_row_value(row_start)[0]
-        col_start = _check_col_value(col_start)[0]
-        row_stop = _check_row_value(row_stop)[0]
-        col_stop = _check_col_value(col_stop)[0]
-
-        if type(property) == str:
-            property = [property]
-
-        object_cell = self.object.get_cell_range_by_position(col_start, row_start, col_stop, row_stop)
-        attr = getattr(object_cell, property[0])
-
-        for idx in range(1, len(property)):
-            attr = getattr(attr, property[idx])
-
-        try:
-            return attr, attr.value.__dir__()
-        except AttributeError:
-            return attr, None
-
-    def set_cells_properties(self, property, value, row_start, col_start, row_stop, col_stop):
-        row_start = _check_row_value(row_start)[0]
-        col_start = _check_col_value(col_start)[0]
-        row_stop = _check_row_value(row_stop)[0]
-        col_stop = _check_col_value(col_stop)[0]
-
-        if type(property) == str:
-            property = [property]
-
-        self.object.get_cell_range_by_position(col_start, row_start, col_stop, row_stop).setPropertyValue(property[0], value)
-
-    def get_cell_object(self, row=1, col=1):
-        row = _check_row_value(row)[0]
-        col = _check_col_value(col)[0]
-
-        return self.object.get_cell_by_position(col, row)
-
-
-
-    def get_cell_formating(self, row, col, extra=None):
-        """font : bold, font name, font size, italic, color
-        text: vertical justify,horizontal justify
-        cell: border, color
-        conditional formating: conditional formating
-        """
-
-        p = ['FormatID']
-        p += ['CharWeight', 'CharFontName', 'CharHeight', 'CharPosture', 'CharColor']
-        p += ['VertJustify', 'HoriJustify']
-        p += ['CellBackColor', 'TableBorder', 'TableBorder2']
-        p += ['ConditionalFormat']
-
-        if extra is not None:
-            p += extra
-
-        p_list = []
-        for property in p:
-            obj, _ = self.get_cell_property(property, row=row, col=col)
-            p_list.append(obj)
-
-        return p_list
-
-    def set_cell_formating(self, obj_list, row, col, extra=None):
-        """font : bold, font name, font size, italic, color
-        text: vertical justify,horizontal justify
-        cell: border, color
-        conditional formating: conditional formating
-        """
-        p = ['FormatID']
-        p += ['CharWeight', 'CharFontName', 'CharHeight', 'CharPosture', 'CharColor']
-        p += ['VertJustify', 'HoriJustify']
-        p += ['CellBackColor', 'TableBorder', 'TableBorder2']
-        p += ['ConditionalFormat']
-
-        if extra is not None:
-            p += extra
-
-        for obj, property in zip(obj_list, p):
-            self.set_cell_property(property, value=obj, row=row, col=col)
-
-    def get_cells_formatting(self, row_start=1, col_start=1, row_stop=None, col_stop=None, extra=None):
-        if row_stop is None:
-            row_stop = self.get_last_row()
-        if col_stop is None:
-            col_stop = self.get_last_col()
-
-        row_stop = _check_row_value(row_stop)[0]
-        col_stop = _check_col_value(col_stop)[0]
-
-        cell_formatting_list = []
-        for idx, row in enumerate(range(row_start, row_stop+2)):
-            cell_formatting_list.append([])
-            for col in range(col_start, col_stop+2):
-                p_list = self.get_cell_formating(row=row, col=col, extra=extra)
-                cell_formatting_list[idx].append(p_list)
-        return cell_formatting_list
-
-    def set_cells_formatting(self, cell_formatting_list, row_start=1, col_start=1, extra=None):
-
-        for idx, row in enumerate(range(row_start, row_start+len(cell_formatting_list))):
-            for idx2, col in enumerate(range(col_start, col_start+len(cell_formatting_list[idx]))):
-                self.set_cell_formating(cell_formatting_list[idx][idx2], row=row, col=col, extra=extra)
-
-    def get_merged(self, ):
-        merged_ranges = []
-        #################
-        start=[]
-        stop = []
-        #################
-
-        ucf = self.object.getUniqueCellFormatRanges()
-        for ranges in ucf:
-            rgtest = ranges.getByIndex(0)
-            if rgtest.getIsMerged():
-                for rg in ranges:
-                    oCursor = rg.getSpreadsheet().createCursorByRange(rg)
-                    oCursor.collapseToMergedArea()
-                    ######################
-                    row_start = int(oCursor.getRowDescriptions()[0].split(' ')[-1])-1
-                    row_end = int(oCursor.getRowDescriptions()[-1].split(' ')[-1])-1
-                    for row in range(row_end-row_start+1):
-                        col_start = backpack.libremanip._letter2num(oCursor.getColumnDescriptions()[0].split(' ')[-1])-1
-                        col_end = backpack.libremanip._letter2num(oCursor.getColumnDescriptions()[-1].split(' ')[-1])-1
-                        for col in range(col_end-col_start+1):
-                            if oCursor.getCellByPosition(col, row).IsMerged:
-                                # print(row+row_start, col+col_start)
-                                start.append([row+row_start, col+col_start])
-                            else:
-                                stop.append([row+row_start, col+col_start])
-                                # print(f'not: {row+row_start}, {col+col_start}')
-                    ######################
-                    addr = oCursor.getRangeAddress()
-
-                    col_start = addr.StartColumn+1
-                    row_start = addr.StartRow+1
-                    col_stop = addr.EndColumn+1
-                    row_stop = addr.EndRow+1
-                    merged_ranges.append([row_start, col_start, row_stop, col_stop])
-        return merged_ranges
-
-    def merge(self, row_start, col_start, row_stop, col_stop):
-        row_start = _check_row_value(row_start)[0]
-        col_start = _check_col_value(col_start)[0]
-        row_stop = _check_row_value(row_stop)[0]
-        col_stop = _check_col_value(col_stop)[0]
-
-        sheet_data = self.object.get_cell_range_by_position(col_start, row_start, col_stop, row_stop)
-        sheet_data.merge(True)
-
-# %%
-p = start_soffice()
-s = soffice()
-# %%
-c = s.Calc()
-# c = s.Calc(filepath='/home/galdino/github/pycalc/dddd.ods')
-# c = s.Calc(new_file=True)
-# %%
-sheet = c.get_sheet_by_position(0)
-# %%
-c.close()
-kill(p)
-s.kill()
-kill_tmux()

@@ -15,25 +15,17 @@ All the core functionality is already working. Now, I'm working on manipulating 
 
 [x] core spreadsheet functionality (open, save, close)
 
+[x] add/remove styles
+
 [x] insert/delete/move sheets
 
-[x] get/set values from a cell
+[x] get/set values from a cell/range
 
-[x] get/set values from a group of cells
+[x] get/set values from a row/column
 
-[x] get/set values from a row
+[x] get/set cell/range properties
 
-[x] get/set values from a column
-
-[x] get cell properties
-
-[ ] set cell properties
-
-[ ] get properties from a group of cells
-
-[ ] set properties from a group of cells
-
-[ ] merge cells
+[x] merge cells
 
 [ ] conditional formatting
 
