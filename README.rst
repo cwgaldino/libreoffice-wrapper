@@ -20,7 +20,7 @@ Python module for controlling `LibreOffice`_ programs (Writer, Calc, Impress, Dr
 
 [x] conditional formatting
 
- Manipulation of Writer, Impress, Draw, and Math instances are in its early development and the module only allows for basic core functionality such as opening/closing/saving files. Base is not implemented at all and trying to open a LibreOffice Base instance will raise an error.
+ Manipulation of Writer, Impress, Draw, and Math instances is in its early development and the module only allows for basic core functionality such as opening/closing/saving files. Base is not implemented at all and trying to open a LibreOffice Base instance will raise an error.
 
 About
 ==========
@@ -59,7 +59,7 @@ Firstly, one has to start the office in Listening Mode. This can be done by open
 
   soffice -accept=socket,host=0,port=8100;urp;
 
-where soffice will be listening to port 8100. Alternatively, libreoffice-wrapper has a built-in function that starts LibreOffice in Listening Mode,
+Alternatively, libreoffice-wrapper has a built-in function that starts LibreOffice in Listening Mode,
 
 .. code-block:: python
 
@@ -68,31 +68,31 @@ where soffice will be listening to port 8100. Alternatively, libreoffice-wrapper
     pid = lw.start_soffice()
 
 
-The function :python:`lw.start_soffice()` returns the pid of the process. Note that, this function starts a ``tmux`` session called ``libreoffice-wrapper`` with a window named ``soffice``, which can be accessed on a different terminal via ``tmux``. In addition to that, ```lw.start_soffice()``` searches for LibreOffice in the default folder ``/opt/libreoffice7.0``. If LibreOffice is installed in a different folder, it must be passed as an argument of the function ```lw.start_soffice(folder=<path-to-libreoffice>)```.
+.. The function :python:`lw.start_soffice()` returns the pid of the process. Note that, this function starts a ``tmux`` session called ``libreoffice-wrapper`` with a window named ``soffice``, which can be accessed on a different terminal via ``tmux``. In addition to that, ```lw.start_soffice()``` searches for LibreOffice in the default folder ``/opt/libreoffice7.0``. If LibreOffice is installed in a different folder, it must be passed as an argument of the function ```lw.start_soffice(folder=<path-to-libreoffice>)```.
 
-Once LibreOffice has been started on listening mode, one can now establish a communication line with `soffice()`.
+Once LibreOffice has been started on listening mode, one can now establish the communication,
 
 .. code-block:: python
 
   soffice = lw.soffice()
 
-where `lw.soffice()` starts a `tmux` session `'libreoffice-wrapper'` with a window named `'python'`, with opens the internal LibreOffice's Python interpreter. After that, the `soffice` object manages to communicate to LibreOffice through this Python instance opened in this `tmux` window.
+.. where `lw.soffice()` starts a `tmux` session `'libreoffice-wrapper'` with a window named `'python'`, with opens the internal LibreOffice's Python interpreter. After that, the `soffice` object manages to communicate to LibreOffice through this Python instance opened in this `tmux` window.
 
-In the end one has to close LibreOffice and close the communication port. This can be done by,
+In the end one has to close LibreOffice and close the communication port,
 
 .. code-block:: python
 
   soffice.kill()
 
-which just ends the `tmux` session.
+.. which just ends the `tmux` session.
 
 Calc
 ========
 
+Example:
+
 .. code-block:: python
 
-  import sys
-  sys.path.append('<path-to-libreoffice-wrapper>')
   import libreoffice_wrapper as lw
 
   # start LibreOffice and establish communication
@@ -100,12 +100,65 @@ Calc
   soffice = lw.soffice()
 
   # Open Calc
-  calc = soffice.Calc()
+  calc = soffice.Calc()  # it will try connect with any open Calc instance. If nothing is open, it will start a new spreadsheet
+  # calc = soffice.Calc('<path-to-spreadsheet-file>')  # connects/opens specific file
+  # calc = soffice.Calc(force_new=True)  # open a new file
 
-  # get a sheet
-  sheet = c.get_sheet_by_position(0)
+  # Calc info
+  print(calc.get_filepath())
+  print(calc.get_title())
+  print(calc.get_sheets_count())
+  print(calc.get_sheets_name())
 
-  #
+  # insert new sheet
+  calc.insert_sheet('my_new_sheet')
+  calc.insert_sheet('sheet_to_be_remove')
+  calc.insert_sheet('another_sheet_to_be_remove')
+
+  # remove sheet
+  calc.remove_sheets_by_position(3)
+  calc.remove_sheet('sheet_to_be_remove')
+
+  # move sheet
+  calc.move_sheet(name='my_new_sheet', position=0)
+
+  # copy_sheet
+  calc.copy_sheet(name='my_new_sheet', new_name='copied_sheet', position=2)
+
+  # sheet name and position
+  print(calc.get_sheet_position(name='my_new_sheet'))
+  print(calc.get_sheet_name_by_position(position=0))
+
+  # Styles
+  print(calc.get_styles())
+  calc.new_style(name='my_new_style', properties={'CellBackColor':-1}, overwrite=False)
+  calc.remove_style(name='my_new_style')
+
+  # get sheet
+  sheet = calc.get_sheet_by_position(0)
+  sheet = calc.get_sheet('my_new_sheet')
+
+  # sheet name
+  print(sheet.get_name())
+  sheet.set_name('new_name')
+
+  # visibility
+  print(sheet.isVisible())
+
+  # move
+  sheet.move(position=1)
+
+  # remove (delete)
+  # sheet.remove()
+
+  # last used row/column
+  print(sheet.get_last_row())
+  print(sheet.get_last_column())
+
+
+
+
+
   sheet.set_row_height([0, 1, 2, 3, 4, 5, 6, 7, 8 , 9], [10, 20, 30, 40, 500, 60, 70, 80, 90, 20])
   sheet.cell_properties(1, 1)
 
