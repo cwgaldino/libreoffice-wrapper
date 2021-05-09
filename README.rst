@@ -2,37 +2,175 @@
 libreoffice-wrapper
 ===================
 
-Manipulate libreoffice programs (Writer, Calc, etc...) via python. The document is updated real time (no need to reload).
+libreoffice-wrapper is Python module for controlling `LibreOffice`_ programs (Writer, Calc, Impress, Draw, Math, and Base).
 
-- Tested on Linux (Ubuntu 20.04)
-- Not tested on windows or mac yet
+ Currently, manipulation of Calc instances is (somewhat) fully implemented and the module supports features such as:
 
-The principle of this module is to use tmux to intermediate communication between a python instance and the libreoffice's internal python interpreter. This way your are not limited to the functionality of libreoffice's internal python.
-
-Still in development. Let me know if you wanna help!
-
-All the core functionality is already working. Now, I'm working on manipulating documents, more specifically, Calc spreadsheets, see below.
-
-[x] core spreadsheet functionality (open, save, close)
-
+[x] core functionality (open, save, close, ...)
+[x] save multiple formats (ods, xlsx, ...)
 [x] add/remove styles
-
 [x] insert/delete/move sheets
+[x] get/set values from a cell/range/rows/columns
+[x] get/set cell/range properties (color, border, ...)
+[x] merge/unmerge cells
+[x] conditional formatting
 
-[x] get/set values from a cell/range
+Manipulation of Writer, Impress, Draw, and Math instances are in its early development and the module only allows for basic core functionality such as opening/closing/saving files. Base is not implemented at all and trying to open a LibreOffice Base instance will raise an error.
 
-[x] get/set values from a row/column
+About
+==========
 
-[x] get/set cell/range properties
+ This module uses `tmux`_ to intermediate communication between a Python instance and the LibreOffice's internal python interpreter, which has free access to LibreOffice's Python API that allows controlling the LibreOffice components. This way your are not limited to the functionality of LibreOffice's internal python, i.e., one is able to manipulate LibreOffice components from any Python terminal and inside Python environments. In addition to that, modifications to a file happen "real time" (no need to reload the file).
 
-[x] merge cells
+It was tested on:
 
-[ ] conditional formatting
+- Linux (Ubuntu 20.04) and LibreOffice Version 7.0.4.2
 
-[ ] validation formatting
+and it should also work fine on MacOS. Currently, I don't think it will work on Windows since `tmux` is not implement there. However, it might work if one uses Windows Subsystem for Linux (WSL). I'm still trying to make it work.
 
-[ ] document the code
+:exclamation: DISCLAIMER: Historically, this module was built to allow manipulating of Calc spreadsheets without the need to reload the document every time a modification was made. Since, this is done, I'm not sure I will keep working on it in order to extend the functionality to Writer, Impress, etc.. In any case, it should be easy enough to implement code for those since the core functionality is the same.
 
-[ ] write examples/tutorials
 
-Note that, right now I'm only interested in being able to manipulate Calc spreadsheets and I'm not sure I will extend the functionality to other types of documents like Writer, Impress, etc.. However, it should be easy enough to implement code for other types of documents since the core functionality is the same. In fact. I started doing something for Writer. Let me know if you're interested in that and I can upload the code.
+Dependencies
+=============
+
+This module is heavily dependent on `tmux`_ which can be installed via apt-get on Debian or Ubuntu (check `tmux`_ page for installation instruction on other OS)::
+
+  apt install tmux
+
+The package `libtmux`_ (tmux workspace manager in python) is also necessary::
+
+  pip install libtmux
+
+Lastly, some features for dealing with Calc instances uses `numpy`_::
+
+  pip install numpy
+
+
+Usage (Initialization)
+=======================
+
+Firstly, one has to start the office in Listening Mode. This can be done by opening the terminal and issuing the command::
+
+  soffice -accept=socket,host=0,port=8100;urp;
+
+where soffice will be listening to port 8100. Alternatively, libreoffice-wrapper has a built-in function that starts LibreOffice in Listening Mode.
+
+.. code-block:: python
+  import sys
+  sys.path.append('<path-to-libreoffice-wrapper>')
+
+  import libreoffice_wrapper as lw
+
+  # %% start LibreOffice
+  pid = lw.start_soffice()
+
+
+The function `lw.start_soffice()` returns the pid of the process. Note that, this function starts a `tmux` session called `'libreoffice-wrapper'` with a window named `'soffice'`, which can be accessed on a different terminal via `tmux`. In addition to that, `lw.start_soffice()` searches for LibreOffice in the default folder `'/opt/libreoffice7.0'`. If LibreOffice is installed in a different folder, it must be passed as an argument of the function `lw.start_soffice(folder=<path-to-libreoffice>)`.
+
+Once LibreOffice has been started on listening mode, one can now establish a communication line with `soffice()`.
+
+.. code-block:: python
+  soffice = lw.soffice()
+
+where `lw.soffice()` starts a `tmux` session `'libreoffice-wrapper'` with a window named `'python'`, with opens the internal LibreOffice's Python interpreter. After that, the `soffice` object manages to communicate to LibreOffice through this Python instance opened in this `tmux` window.
+
+In the end one has to close LibreOffice and close the communication port. This can be done by,
+
+.. code-block:: python
+  soffice.kill()
+
+which just ends the `tmux` session.
+
+Calc
+========
+
+.. code-block:: python
+  import sys
+  sys.path.append('<path-to-libreoffice-wrapper>')
+  import libreoffice_wrapper as lw
+
+  # start LibreOffice and establish communication
+  pid = lw.start_soffice()
+  soffice = lw.soffice()
+
+  # Open Calc
+  calc = soffice.Calc()
+
+  # get a sheet
+  sheet = c.get_sheet_by_position(0)
+
+  #
+  sheet.set_row_height([0, 1, 2, 3, 4, 5, 6, 7, 8 , 9], [10, 20, 30, 40, 500, 60, 70, 80, 90, 20])
+  sheet.cell_properties(1, 1)
+
+  # 
+  sheet.get_cell_property(2, 2, 'CellBackColor')
+  sheet.set_cell_property(5, 5, 'CellBackColor', 16776960)
+  sheet.get_cell_property(2, 2, 'CellBackColor')
+
+  #
+  sheet.get_cell_property(2, 2, 'TopBorder')
+  sheet.set_cell_property(2, 2, 'TopBorder.LineWidth', 10)
+  sheet.get_cell_property(2, 2, 'TopBorder')
+
+  #
+  d = sheet.get_cell_property(5, 5, 'TopBorder')
+  d['LineWidth'] = 7
+  sheet.set_cell_property(5, 5, 'TopBorder', d)
+  sheet.get_cell_property(5, 5, 'TopBorder')
+
+  # saving modifications
+  calc.save()
+
+  # finishing up
+  calc.close()
+  soffice.kill()
+
+
+
+
+Writer, Impress, Draw, Math and Base
+======================================
+
+Manipulation of Writer, Impress, Draw, and Math instances are in its early development and the module only allows for basic core functionality such as opening/closing/saving files. Base is not implemented at all and trying to open a LibreOffice Base instance will raise an error.
+
+.. code-block:: python
+  import sys
+  sys.path.append('<path-to-libreoffice-wrapper>')
+
+  import libreoffice_wrapper as lw
+
+  # %% start LibreOffice
+  pid = lw.start_soffice()
+  soffice = lw.soffice()
+
+  # %% Writer
+  writer = soffice.Writer()
+  writer.save()
+  writer.close()
+
+  # %% Impress
+  impress = soffice.Impress()
+  impress.save()
+  impress.close()
+
+  # %% Draw
+  draw = soffice.Draw()
+  draw.save()
+  draw.close()
+
+  # %% Math
+  math = soffice.Math()
+  math.save()
+  math.close()
+
+  # %% close LibreOffice
+  soffice.kill()
+
+
+
+.. _tmux: https://github.com/tmux/tmux/wiki
+.. _LibreOffice: https://www.libreoffice.org/
+.. _libtmux: https://github.com/tmux-python/libtmux
+.. _numpy: https://numpy.org/
