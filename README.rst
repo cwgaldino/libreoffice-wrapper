@@ -68,7 +68,7 @@ where soffice will be listening to port 8100. Alternatively, libreoffice-wrapper
     pid = lw.start_soffice()
 
 
-The function ```lw.start_soffice()``` returns the pid of the process. Note that, this function starts a ``tmux`` session called ``'libreoffice-wrapper'`` with a window named ``'soffice'``, which can be accessed on a different terminal via ``tmux``. In addition to that, ```lw.start_soffice()``` searches for LibreOffice in the default folder ``'/opt/libreoffice7.0'``. If LibreOffice is installed in a different folder, it must be passed as an argument of the function ```lw.start_soffice(folder=<path-to-libreoffice>)```.
+The function :python:`lw.start_soffice()` returns the pid of the process. Note that, this function starts a ``tmux`` session called ``libreoffice-wrapper`` with a window named ``soffice``, which can be accessed on a different terminal via ``tmux``. In addition to that, ```lw.start_soffice()``` searches for LibreOffice in the default folder ``/opt/libreoffice7.0``. If LibreOffice is installed in a different folder, it must be passed as an argument of the function ```lw.start_soffice(folder=<path-to-libreoffice>)```.
 
 Once LibreOffice has been started on listening mode, one can now establish a communication line with `soffice()`.
 
