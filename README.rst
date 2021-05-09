@@ -57,6 +57,7 @@ Firstly, one has to start the office in Listening Mode. This can be done by open
 where soffice will be listening to port 8100. Alternatively, libreoffice-wrapper has a built-in function that starts LibreOffice in Listening Mode.
 
 .. code-block:: python
+
     import sys
     sys.path.append('<path-to-libreoffice-wrapper>')
 
@@ -71,6 +72,7 @@ The function `lw.start_soffice()` returns the pid of the process. Note that, thi
 Once LibreOffice has been started on listening mode, one can now establish a communication line with `soffice()`.
 
 .. code-block:: python
+
   soffice = lw.soffice()
 
 where `lw.soffice()` starts a `tmux` session `'libreoffice-wrapper'` with a window named `'python'`, with opens the internal LibreOffice's Python interpreter. After that, the `soffice` object manages to communicate to LibreOffice through this Python instance opened in this `tmux` window.
@@ -78,6 +80,7 @@ where `lw.soffice()` starts a `tmux` session `'libreoffice-wrapper'` with a wind
 In the end one has to close LibreOffice and close the communication port. This can be done by,
 
 .. code-block:: python
+
   soffice.kill()
 
 which just ends the `tmux` session.
@@ -86,6 +89,7 @@ Calc
 ========
 
 .. code-block:: python
+
   import sys
   sys.path.append('<path-to-libreoffice-wrapper>')
   import libreoffice_wrapper as lw
@@ -136,6 +140,7 @@ Writer, Impress, Draw, Math and Base
 Manipulation of Writer, Impress, Draw, and Math instances are in its early development and the module only allows for basic core functionality such as opening/closing/saving files. Base is not implemented at all and trying to open a LibreOffice Base instance will raise an error.
 
 .. code-block:: python
+
   import sys
   sys.path.append('<path-to-libreoffice-wrapper>')
 
