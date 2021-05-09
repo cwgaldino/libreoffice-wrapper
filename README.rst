@@ -2,25 +2,30 @@
 libreoffice-wrapper
 ===================
 
-libreoffice-wrapper is Python module for controlling `LibreOffice`_ programs (Writer, Calc, Impress, Draw, Math, and Base).
-
-Currently, manipulation of Calc instances is (somewhat) fully implemented and the module supports features such as:
+Python module for controlling `LibreOffice`_ programs (Writer, Calc, Impress, Draw, Math, and Base). Currently, manipulation of Calc instances is (somewhat) fully implemented and the module supports features such as:
 
 [x] core functionality (open, save, close, ...)
+
 [x] save multiple formats (ods, xlsx, ...)
+
 [x] add/remove styles
+
 [x] insert/delete/move sheets
+
 [x] get/set values from a cell/range/rows/columns
+
 [x] get/set cell/range properties (color, border, ...)
+
 [x] merge/unmerge cells
+
 [x] conditional formatting
 
-Manipulation of Writer, Impress, Draw, and Math instances are in its early development and the module only allows for basic core functionality such as opening/closing/saving files. Base is not implemented at all and trying to open a LibreOffice Base instance will raise an error.
+ Manipulation of Writer, Impress, Draw, and Math instances are in its early development and the module only allows for basic core functionality such as opening/closing/saving files. Base is not implemented at all and trying to open a LibreOffice Base instance will raise an error.
 
 About
 ==========
 
-This module uses `tmux`_ to intermediate communication between a Python instance and the LibreOffice's internal python interpreter, which has free access to LibreOffice's Python API that allows controlling the LibreOffice components. This way your are not limited to the functionality of LibreOffice's internal python, i.e., one is able to manipulate LibreOffice components from any Python terminal and inside Python environments. In addition to that, modifications to a file happen "real time" (no need to reload the file).
+This module uses `tmux`_ to intermediate communication between a Python instance and the LibreOffice's internal python interpreter, which has free access to LibreOffice's Python API that allows controlling the LibreOffice components. This way, you are not limited to the functionality of LibreOffice's internal python, i.e., one is able to manipulate LibreOffice components from any Python terminal and inside Python environments. In addition to that, modifications to a file happen "real time" (no need to reload the file).
 
 It was tested on:
 
@@ -54,20 +59,16 @@ Firstly, one has to start the office in Listening Mode. This can be done by open
 
   soffice -accept=socket,host=0,port=8100;urp;
 
-where soffice will be listening to port 8100. Alternatively, libreoffice-wrapper has a built-in function that starts LibreOffice in Listening Mode.
+where soffice will be listening to port 8100. Alternatively, libreoffice-wrapper has a built-in function that starts LibreOffice in Listening Mode,
 
 .. code-block:: python
 
-    import sys
-    sys.path.append('<path-to-libreoffice-wrapper>')
-
     import libreoffice_wrapper as lw
 
-    # %% start LibreOffice
     pid = lw.start_soffice()
 
 
-The function `lw.start_soffice()` returns the pid of the process. Note that, this function starts a `tmux` session called `'libreoffice-wrapper'` with a window named `'soffice'`, which can be accessed on a different terminal via `tmux`. In addition to that, `lw.start_soffice()` searches for LibreOffice in the default folder `'/opt/libreoffice7.0'`. If LibreOffice is installed in a different folder, it must be passed as an argument of the function `lw.start_soffice(folder=<path-to-libreoffice>)`.
+The function ```lw.start_soffice()``` returns the pid of the process. Note that, this function starts a ``tmux`` session called ``'libreoffice-wrapper'`` with a window named ``'soffice'``, which can be accessed on a different terminal via ``tmux``. In addition to that, ```lw.start_soffice()``` searches for LibreOffice in the default folder ``'/opt/libreoffice7.0'``. If LibreOffice is installed in a different folder, it must be passed as an argument of the function ```lw.start_soffice(folder=<path-to-libreoffice>)```.
 
 Once LibreOffice has been started on listening mode, one can now establish a communication line with `soffice()`.
 
