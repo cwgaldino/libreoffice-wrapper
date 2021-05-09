@@ -4,7 +4,7 @@ libreoffice-wrapper
 
 libreoffice-wrapper is Python module for controlling `LibreOffice`_ programs (Writer, Calc, Impress, Draw, Math, and Base).
 
- Currently, manipulation of Calc instances is (somewhat) fully implemented and the module supports features such as:
+Currently, manipulation of Calc instances is (somewhat) fully implemented and the module supports features such as:
 
 [x] core functionality (open, save, close, ...)
 [x] save multiple formats (ods, xlsx, ...)
@@ -20,7 +20,7 @@ Manipulation of Writer, Impress, Draw, and Math instances are in its early devel
 About
 ==========
 
- This module uses `tmux`_ to intermediate communication between a Python instance and the LibreOffice's internal python interpreter, which has free access to LibreOffice's Python API that allows controlling the LibreOffice components. This way your are not limited to the functionality of LibreOffice's internal python, i.e., one is able to manipulate LibreOffice components from any Python terminal and inside Python environments. In addition to that, modifications to a file happen "real time" (no need to reload the file).
+This module uses `tmux`_ to intermediate communication between a Python instance and the LibreOffice's internal python interpreter, which has free access to LibreOffice's Python API that allows controlling the LibreOffice components. This way your are not limited to the functionality of LibreOffice's internal python, i.e., one is able to manipulate LibreOffice components from any Python terminal and inside Python environments. In addition to that, modifications to a file happen "real time" (no need to reload the file).
 
 It was tested on:
 
@@ -28,7 +28,7 @@ It was tested on:
 
 and it should also work fine on MacOS. Currently, I don't think it will work on Windows since `tmux` is not implement there. However, it might work if one uses Windows Subsystem for Linux (WSL). I'm still trying to make it work.
 
-:exclamation: DISCLAIMER: Historically, this module was built to allow manipulating of Calc spreadsheets without the need to reload the document every time a modification was made. Since, this is done, I'm not sure I will keep working on it in order to extend the functionality to Writer, Impress, etc.. In any case, it should be easy enough to implement code for those since the core functionality is the same.
+ DISCLAIMER: At first, this module was built to allow manipulating of Calc spreadsheets without the need to reload the document every time a modification was made. Since, this is done, I'm not sure I will keep working on it in order to extend the functionality to Writer, Impress, etc.. In any case, it should be easy enough to implement code for those since the core functionality is the same.
 
 
 Dependencies
@@ -57,13 +57,13 @@ Firstly, one has to start the office in Listening Mode. This can be done by open
 where soffice will be listening to port 8100. Alternatively, libreoffice-wrapper has a built-in function that starts LibreOffice in Listening Mode.
 
 .. code-block:: python
-  import sys
-  sys.path.append('<path-to-libreoffice-wrapper>')
+    import sys
+    sys.path.append('<path-to-libreoffice-wrapper>')
 
-  import libreoffice_wrapper as lw
+    import libreoffice_wrapper as lw
 
-  # %% start LibreOffice
-  pid = lw.start_soffice()
+    # %% start LibreOffice
+    pid = lw.start_soffice()
 
 
 The function `lw.start_soffice()` returns the pid of the process. Note that, this function starts a `tmux` session called `'libreoffice-wrapper'` with a window named `'soffice'`, which can be accessed on a different terminal via `tmux`. In addition to that, `lw.start_soffice()` searches for LibreOffice in the default folder `'/opt/libreoffice7.0'`. If LibreOffice is installed in a different folder, it must be passed as an argument of the function `lw.start_soffice(folder=<path-to-libreoffice>)`.
@@ -104,7 +104,7 @@ Calc
   sheet.set_row_height([0, 1, 2, 3, 4, 5, 6, 7, 8 , 9], [10, 20, 30, 40, 500, 60, 70, 80, 90, 20])
   sheet.cell_properties(1, 1)
 
-  # 
+  #
   sheet.get_cell_property(2, 2, 'CellBackColor')
   sheet.set_cell_property(5, 5, 'CellBackColor', 16776960)
   sheet.get_cell_property(2, 2, 'CellBackColor')
