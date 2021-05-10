@@ -89,8 +89,6 @@ In the end one has to close LibreOffice and close the communication port,
 Calc
 ========
 
-Example:
-
 .. code-block:: python
 
   import libreoffice_wrapper as lw
@@ -105,10 +103,17 @@ Example:
   # calc = soffice.Calc(force_new=True)  # open a new file
 
   # Calc info
-  print(calc.get_filepath())
   print(calc.get_title())
+  print(calc.get_filepath())
   print(calc.get_sheets_count())
   print(calc.get_sheets_name())
+
+  # save
+  calc.save()
+  # calc.save('<path-to-save>')
+
+  # close Calc
+  # calc.close()
 
   # insert new sheet
   calc.insert_sheet('my_new_sheet')
@@ -131,7 +136,8 @@ Example:
 
   # Styles
   print(calc.get_styles())
-  calc.new_style(name='my_new_style', properties={'CellBackColor':-1}, overwrite=False)
+  properties = {'CellBackColor':16776960, 'CharWeight':150}
+  calc.new_style(name='my_new_style', properties=properties)
   calc.remove_style(name='my_new_style')
 
   # get sheet
@@ -146,43 +152,59 @@ Example:
   print(sheet.isVisible())
 
   # move
-  sheet.move(position=1)
+  sheet.move(position=2)  # in this case moving to 0 or 1 yields the same result
 
   # remove (delete)
   # sheet.remove()
+
+  # set/get data (data can be set in many ways)
+  sheet.set_value('A1', 'hello')
+  print(sheet.get_value('A1'))
+
+  sheet.set_value('B', '1', 'hello 2')
+  print(sheet.get_value('B', '1'))
+
+  sheet.set_value('C', 0, 'hello 3')
+  print(sheet.get_value('C', 0))
+
+  sheet.set_value(3, 0, 'hello 4')
+  print(sheet.get_value(3, 0))
+
+  sheet.set_value(4, '1', 'hello 5')
+  print(sheet.get_value(4, '1'))
+
+  sheet.set_value('A2:C3', [['a', 'b', 'c'], [1, 2, 3]])
+  print(sheet.get_value('A2:C3'))
+
+  sheet.set_value('A4', 'C5', [['a', 'b', 'c'], [1, 2, 3]])
+  print(sheet.get_value('A4', 'C5'))
+
+  sheet.set_value('A6', [['a', 'b', 'c'], [1, 2, 3]])
+  print(sheet.get_value('A6:C7'))
+
+  sheet.set_value('A', '8', [['a', 'b', 'c'], [1, 2, 3]])
+  print(sheet.get_value('A8:C9'))
+
+  sheet.set_value('A', 9, [['a', 'b', 'c'], [1, 2, 3]])
+  print(sheet.get_value(0, 9, 2, 11))
+
+  sheet.set_value('A', '12', 'C', '13', [['a', 'b', 'c'], [1, 2, 3]])
+  print(sheet.get_value('A', '12', 'C', '13'))
+
+  sheet.set_value(0, 13, 2, 14, [['a', 'b', 'c'], [1, 2, 3]])
+  print(sheet.get_value(0, 13, 2, 14))
 
   # last used row/column
   print(sheet.get_last_row())
   print(sheet.get_last_column())
 
-
-
-
-
-  sheet.set_row_height([0, 1, 2, 3, 4, 5, 6, 7, 8 , 9], [10, 20, 30, 40, 500, 60, 70, 80, 90, 20])
-  sheet.cell_properties(1, 1)
-
-  #
-  sheet.get_cell_property(2, 2, 'CellBackColor')
-  sheet.set_cell_property(5, 5, 'CellBackColor', 16776960)
-  sheet.get_cell_property(2, 2, 'CellBackColor')
-
-  #
-  sheet.get_cell_property(2, 2, 'TopBorder')
-  sheet.set_cell_property(2, 2, 'TopBorder.LineWidth', 10)
-  sheet.get_cell_property(2, 2, 'TopBorder')
-
-  #
-  d = sheet.get_cell_property(5, 5, 'TopBorder')
-  d['LineWidth'] = 7
-  sheet.set_cell_property(5, 5, 'TopBorder', d)
-  sheet.get_cell_property(5, 5, 'TopBorder')
-
   # saving modifications
   calc.save()
 
-  # finishing up
+  # close Calc
   calc.close()
+
+  # close LibreOffice/communication
   soffice.kill()
 
 
@@ -191,40 +213,37 @@ Example:
 Writer, Impress, Draw, Math and Base
 ======================================
 
-Manipulation of Writer, Impress, Draw, and Math instances are in its early development and the module only allows for basic core functionality such as opening/closing/saving files. Base is not implemented at all and trying to open a LibreOffice Base instance will raise an error.
+Manipulation of Writer, Impress, Draw, and Math instances is in its early development and the module only allows for basic core functionality such as opening/closing/saving files. Base is not implemented at all and trying to open a LibreOffice Base instance will raise an error.
 
 .. code-block:: python
 
-  import sys
-  sys.path.append('<path-to-libreoffice-wrapper>')
-
   import libreoffice_wrapper as lw
 
-  # %% start LibreOffice
+  # start LibreOffice and establish communication
   pid = lw.start_soffice()
   soffice = lw.soffice()
 
-  # %% Writer
+  # Writer
   writer = soffice.Writer()
   writer.save()
   writer.close()
 
-  # %% Impress
+  # Impress
   impress = soffice.Impress()
   impress.save()
   impress.close()
 
-  # %% Draw
+  # Draw
   draw = soffice.Draw()
   draw.save()
   draw.close()
 
-  # %% Math
+  # Math
   math = soffice.Math()
   math.save()
   math.close()
 
-  # %% close LibreOffice
+  # close LibreOffice/communication
   soffice.kill()
 
 

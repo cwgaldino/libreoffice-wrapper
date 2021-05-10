@@ -287,10 +287,12 @@ def _parse_args(args, kwargs, req_args=[], opt_args=[]):
 
     for i in range(lookout):
         req[req_args[::-1][i]] = args[::-1][i]
-    args = args[:-lookout]
-    print(args)
+    if lookout != 0:
+        args = args[:-lookout]
 
+    isRange = False
     if len(args) == 0:
+        print('here')
         isRange = -1
     elif len(args) == 1:
         try:
@@ -1270,7 +1272,7 @@ class Calc():
         else:
             raise valueError(f'{name} is not a style')
 
-    def new_style(self, name, properties, overwrite=False):
+    def new_style(self, name, properties):
         """
         name = 'MyStyle'
         overwrite = True
@@ -1299,12 +1301,8 @@ class Calc():
             else:
                 values_string += str(properties[name0]) +', '
 
-        sheet.write(f'del sheet_{sheet_tag}')
         if name in self.get_styles():
-            if overwrite:
-                self.remove_style(name)
-            else:
-                raise valueError(f'{name} already exists')
+            raise ValueError(f'{name} already exists')
 
         self.write(f"""new_style = document_{self.tag}.createInstance('com.sun.star.style.CellStyle')\n"""+\
                 f"""document_{self.tag}.getStyleFamilies()['CellStyles'].insertByName('{name}', new_style)\n"""+\
@@ -1467,25 +1465,47 @@ class Sheet():
             self.write(f"sheet_{self.tag}.getRows()[{row}].setPropertyValue('Height', {height})")
 
     def get_row_height(self, row):
-        row = _check_row_value(row)
+        row = _check_row_valuke(row)
         return int(self.write(f"print(sheet_{self.tag}.getRows()[{row}].Height)")[0])
 
+
+
     def set_value(self, *args, **kwargs):
-        isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=[], opt_args=['format'])
-        if 'format' in opt:
-            format = opt['format']
-        else:
+        isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=['value'], opt_args=['format'])
+        value = req['value']
+
+        if opt['format'] is None:
             format = 'formula'
+        else:
+            format = opt['format']
 
         if isRange == -1:
             raise ValueError('missing range/cell')
-        elif isRange == True:
+        elif isRange == False:  # check if value is a range
+            if type(value) is not str:
+                try:
+                    if len(value) > 0:
+                        if type(value[0]) is not str:
+                            if len(value) > 0:
+                                isRange = True
+                                c = list(c)
+                                c.append(c[0] + len(value[0])-1)
+                                c.append(c[1] + len(value)-1)
+                except TypeError:
+                    pass
+
+        if isRange == True:
+            if c[2] - c[0] != len(value[0])-1 or c[3] - c[1] != len(value)-1:
+                raise ValueError('cell range does not match data/value size.')
+            it = iter(value)
+            if not all(len(l) == len(next(it)) for l in it):
+                 raise ValueError('data/value is not a square matrix.')
             if format == 'formula':
-                self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[1]}, {c[3]}).setFormulaArray({value})")
+                self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).setFormulaArray({value})")
             elif format == 'string':
-                self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[1]}, {c[3]}).setDataArray({value})")
+                self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).setDataArray({value})")
             elif format == 'number':
-                self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[1]}, {c[3]}).setDataArray({value})")
+                self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).setDataArray({value})")
             else:
                 raise ValueError(f"{format} is not a valid format (valid formats: 'formula', 'string', 'number').")
         elif isRange == False:
@@ -1500,10 +1520,10 @@ class Sheet():
 
     def get_value(self, *args, **kwargs):
         isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=[], opt_args=['format'])
-        if 'format' in opt:
-            format = opt['format']
-        else:
+        if opt['format'] is None:
             format = 'string'
+        else:
+            format = opt['format']
 
         if isRange == -1:
             raise ValueError('missing range/cell')
@@ -1585,7 +1605,7 @@ class Sheet():
         if 'format' in kwargs:
             format = kwargs['format']
 
-        return self.set_cells(value=[value], column_start=column_start, row_start=row_start, format=format)
+        return self.set_value(value=[value], column_start=column_start, row_start=row_start, format=format)
 
     def get_row(self, *args, **kwargs):
         """
@@ -1847,6 +1867,7 @@ class Sheet():
         ConditionalFormatXML
         """
         isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=['name'], opt_args=[])
+        name = req['name']
 
         if isRange == -1:
             raise ValueError('missing range/cell')
