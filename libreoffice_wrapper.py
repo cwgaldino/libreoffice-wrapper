@@ -1667,9 +1667,6 @@ class Sheet():
         elif isRange == False or isRange == -1:
             raise ValueError('no range to unmerge')
 
-
-
-
     def cell_properties(self, *args, **kwargs):
         isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=[], opt_args=[])
 

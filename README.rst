@@ -70,7 +70,7 @@ Alternatively, libreoffice-wrapper has a built-in function that starts LibreOffi
 
 .. The function :python:`lw.start_soffice()` returns the pid of the process. Note that, this function starts a ``tmux`` session called ``libreoffice-wrapper`` with a window named ``soffice``, which can be accessed on a different terminal via ``tmux``. In addition to that, ```lw.start_soffice()``` searches for LibreOffice in the default folder ``/opt/libreoffice7.0``. If LibreOffice is installed in a different folder, it must be passed as an argument of the function ```lw.start_soffice(folder=<path-to-libreoffice>)```.
 
-Once LibreOffice has been started in listening mode, one can now establish the communication,
+Once LibreOffice is up and running in listening mode, one can now establish the communication,
 
 .. code-block:: python
 
@@ -78,7 +78,7 @@ Once LibreOffice has been started in listening mode, one can now establish the c
 
 .. where `lw.soffice()` starts a `tmux` session `'libreoffice-wrapper'` with a window named `'python'`, with opens the internal LibreOffice's Python interpreter. After that, the `soffice` object manages to communicate to LibreOffice through this Python instance opened in this `tmux` window.
 
-In the end one has to close LibreOffice and close the communication port,
+To close LibreOffice and its tmux session,
 
 .. code-block:: python
 
@@ -88,6 +88,8 @@ In the end one has to close LibreOffice and close the communication port,
 
 Calc
 ========
+
+Most functionality regarding Calc instances can be found in the example below,
 
 .. code-block:: python
 
@@ -100,7 +102,7 @@ Calc
   soffice = lw.soffice()
 
   # Open Calc
-  calc = soffice.Calc()  # it will try connect with any open Calc instance. If nothing is open, it will start a new spreadsheet
+  calc = soffice.Calc()  # tries to connect with any open Calc instance # If nothing is open, it will start a new spreadsheet
   # calc = soffice.Calc('<path-to-spreadsheet-file>')  # connects/opens specific file
   # calc = soffice.Calc(force_new=True)  # open a new file
 
