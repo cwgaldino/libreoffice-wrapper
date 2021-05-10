@@ -89,7 +89,7 @@ To close LibreOffice and its tmux session,
 Calc
 ========
 
-Most functionality regarding Calc instances can be found in the example below,
+Most functionality regarding Calc spreadsheets can be found in the example below,
 
 .. code-block:: python
 
@@ -102,7 +102,8 @@ Most functionality regarding Calc instances can be found in the example below,
   soffice = lw.soffice()
 
   # Open Calc
-  calc = soffice.Calc()  # tries to connect with any open Calc instance # If nothing is open, it will start a new spreadsheet
+  calc = soffice.Calc()  # tries to connect with any open Calc instance
+  # If nothing is open, it will start a new spreadsheet
   # calc = soffice.Calc('<path-to-spreadsheet-file>')  # connects/opens specific file
   # calc = soffice.Calc(force_new=True)  # open a new file
 

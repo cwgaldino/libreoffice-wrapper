@@ -2,15 +2,18 @@
 # -*- coding: utf-8 -*-
 
 import libreoffice_wrapper as lw
+import time
 import importlib
 importlib.reload(lw)
 
 # start LibreOffice and establish communication
 pid = lw.start_soffice()
+time.sleep(10)
 soffice = lw.soffice()
 
 # Open Calc
-calc = soffice.Calc()  # it will try connect with any open Calc instance. If nothing is open, it will start a new spreadsheet
+calc = soffice.Calc()  # tries to connect with any open Calc instance
+# If nothing is open, it will start a new spreadsheet
 # calc = soffice.Calc('<path-to-spreadsheet-file>')  # connects/opens specific file
 # calc = soffice.Calc(force_new=True)  # open a new file
 
