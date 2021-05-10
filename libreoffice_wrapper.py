@@ -278,12 +278,15 @@ def _parse_args(args, kwargs, req_args=[], opt_args=[]):
             opt[k] = kwargs[k]
 
     lookout = 0
+    del_list = []
     for i, k in enumerate(req_args):
         try:
             req[k] = kwargs[k]
-            del req_args[k]
+            del_list.append(k)
         except KeyError:
             lookout += 1
+    for k in del_list:
+        del req_args[req_args.index(k)]
 
     for i in range(lookout):
         req[req_args[::-1][i]] = args[::-1][i]
@@ -292,7 +295,6 @@ def _parse_args(args, kwargs, req_args=[], opt_args=[]):
 
     isRange = False
     if len(args) == 0:
-        print('here')
         isRange = -1
     elif len(args) == 1:
         try:
@@ -1126,6 +1128,14 @@ class Calc():
                    f"""        f[key] = get_cells_property_recursively(tag, column_start, row_start, column_stop, row_stop, name, attrs+[key])\n""" +\
                    f"""    return f""")
 
+        self.write(f"""def _letter2num(string):\n"""+\
+                    f"""    string = string.lower()\n"""+\
+                    f"""    alphabet = 'abcdefghijklmnopqrstuvwxyz'\n"""+\
+                    f"""    n = 0\n"""+\
+                    f"""    for idx, s in enumerate(string):\n"""+\
+                    f"""        n += alphabet.index(s)+(idx)*26\n"""+\
+                    f"""    return n""")
+
         self.write(f"""from com.sun.star.table import TableBorder, BorderLine2, ShadowFormat\n""" +\
                   f"""from com.sun.star.awt import Size, Point\n""" +\
                   f"""from com.sun.star.lang import Locale\n""" +\
@@ -1362,79 +1372,87 @@ class Sheet():
 
     def get_last_row(self):
         """starts from 0"""
-        row_name = eval(self.write(f"print(sheet_{self.tag}.getRowDescriptions())")[0])[-1]
-        idx = int(row_name.split()[-1])
-
-        visible = False
-        while visible == False:
-            visible = str2bool(self.write(f"print(sheet_{self.tag}.getRows()[{idx}].IsVisible)")[0])
-            idx += 1
-        return idx-2
+        return int(self.write(f"""row_name = sheet_{self.tag}.getRowDescriptions()[-1]\n"""+\
+                           f"""idx = int(row_name.split()[-1])\n"""+\
+                           f"""visible = False\n"""+\
+                           f"""while visible == False:\n"""+\
+                           f"""    visible = sheet_{self.tag}.getRows()[idx].IsVisible\n"""+\
+                           f"""    idx += 1\n"""+\
+                           f"""print(idx-2)""")[-1])
 
     def get_last_column(self):
         """starts from 0"""
-        col_name = eval(self.write(f"print(sheet_{self.tag}.getColumnDescriptions())")[0])[-1]
-        idx = int(_letter2num(col_name.split()[-1]))
-
-        visible = False
-        while visible == False:
-            visible = str2bool(self.write(f"print(sheet_{self.tag}.getColumns()[{idx}].IsVisible)")[0])
-            idx += 1
-        return idx-1
+        return int(self.write(f"""col_name = sheet_{self.tag}.getColumnDescriptions()[-1]\n"""+\
+                           f"""idx = int(_letter2num(col_name.split()[-1]))\n"""+\
+                           f"""visible = False\n"""+\
+                           f"""while visible == False:\n"""+\
+                           f"""    visible = sheet_{self.tag}.getColumns()[idx+1].IsVisible\n"""+\
+                           f"""    idx += 1\n"""+\
+                           f"""print(idx-1)""")[-1])
 
     def get_row_length(self, row):
-        lc = self.get_last_column()
         row = _check_row_value(row)
-
-        if int(self.write(f"print(len(sheet_{self.tag}.getCellRangeByPosition(0, {row}, {lc}, {row}).queryEmptyCells()))")[0]) == 0:
-            return lc+1
-        else:
-            startColumn = int(self.write(f"print(sheet_{self.tag}.getCellRangeByPosition(0, {row}, {lc}, {row}).queryEmptyCells()[-1].RangeAddress.StartColumn)")[0])
-            endColumn = int(self.write(f"print(sheet_{self.tag}.getCellRangeByPosition(0, {row}, {lc}, {row}).queryEmptyCells()[-1].RangeAddress.EndColumn)")[0])
-
-            if endColumn == lc:
-                return int(self.write(f"print(sheet_{self.tag}.getCellRangeByPosition(0, {row}, {lc}, {row}).queryEmptyCells()[-1].RangeAddress.StartColumn)")[0])
-            else:
-                return lc+1
+        return int(self.write(f"""row_name = sheet_{self.tag}.getRowDescriptions()[-1]\n"""+\
+                           f"""idx = int(row_name.split()[-1])\n"""+\
+                           f"""visible = False\n"""+\
+                           f"""while visible == False:\n"""+\
+                           f"""    visible = sheet_{self.tag}.getRows()[idx].IsVisible\n"""+\
+                           f"""    idx += 1\n"""+\
+                           f"""lc = idx-2\n"""+\
+                           f"""if len(sheet_{self.tag}.getCellRangeByPosition(0, {row}, lc, {row}).queryEmptyCells()) == 0:\n"""+\
+                           f"""    row_length = lc+1\n"""+\
+                           f"""else:\n"""+\
+                           f"""    startColumn = sheet_{self.tag}.getCellRangeByPosition(0, {row}, lc, {row}).queryEmptyCells()[-1].RangeAddress.StartColumn\n"""+\
+                           f"""    endColumn = sheet_{self.tag}.getCellRangeByPosition(0, {row}, lc, {row}).queryEmptyCells()[-1].RangeAddress.EndColumn\n"""+\
+                           f"""    if endColumn == lc:\n"""+\
+                           f"""        row_length = sheet_{self.tag}.getCellRangeByPosition(0, {row}, lc, {row}).queryEmptyCells()[-1].RangeAddress.StartColumn\n"""+\
+                           f"""    else:\n"""+\
+                           f"""        row_length = lc + 1\n"""+\
+                           f"""print(row_length)""")[-1])
 
     def get_column_length(self, column):
-        lr = self.get_last_row()
         column = _check_column_value(column)
-
-        if int(self.write(f"print(len(sheet_{self.tag}.getCellRangeByPosition({column}, 0, {column}, {lr}).queryEmptyCells()))")[0]) == 0:
-            return lr+1
-        else:
-            startRow = int(self.write(f"print(sheet_{self.tag}.getCellRangeByPosition({column}, 0, {column}, {lr}).queryEmptyCells()[-1].RangeAddress.StartRow)")[0])
-            endRow = int(self.write(f"print(sheet_{self.tag}.getCellRangeByPosition({column}, 0, {column}, {lr}).queryEmptyCells()[-1].RangeAddress.EndRow)")[0])
-
-            if endRow == lr:
-                return int(self.write(f"print(sheet_{self.tag}.getCellRangeByPosition({column}, 0, {column}, {lr}).queryEmptyCells()[-1].RangeAddress.StartRow)")[0])
-            else:
-                return lr+1
+        return int(self.write(f"""row_name = sheet_{self.tag}.getRowDescriptions()[-1]\n"""+\
+                           f"""idx = int(row_name.split()[-1])\n"""+\
+                           f"""visible = False\n"""+\
+                           f"""while visible == False:\n"""+\
+                           f"""    visible = sheet_{self.tag}.getRows()[idx].IsVisible\n"""+\
+                           f"""    idx += 1\n"""+\
+                           f"""lr = idx-1\n"""+\
+                           f"""if len(sheet_{self.tag}.getCellRangeByPosition({column}, 0, {column}, lr).queryEmptyCells()) == 0:\n"""+\
+                           f"""    column_length = lr+1\n"""+\
+                           f"""else:\n"""+\
+                           f"""    startRow = sheet_{self.tag}.getCellRangeByPosition({column}, 0, {column}, lr).queryEmptyCells()[-1].RangeAddress.StartRow\n"""+\
+                           f"""    endRow = sheet_{self.tag}.getCellRangeByPosition({column}, 0, {column}, lr).queryEmptyCells()[-1].RangeAddress.EndRow\n"""+\
+                           f"""    if endRow == lr:\n"""+\
+                           f"""        column_length = sheet_{self.tag}.getCellRangeByPosition({column}, 0, {column}, lr).queryEmptyCells()[-1].RangeAddress.StartRow\n"""+\
+                           f"""    else:\n"""+\
+                           f"""        column_length = lr + 1\n"""+\
+                           f"""print(column_length)""")[-1])
 
     def set_column_width(self, column, width):
         """column can be single value or list
         width can be single value or list
         """
         if isinstance(column, list) or isinstance(column, tuple):
-            column = [_check_column_value(column) for c in column]
+            column = [_check_column_value(c) for c in column]
             if isinstance(width, list) or isinstance(width, tuple):
                 if len(column) != len(width):
-                    raise ValueError("Width and column must be the same lenght.")
-                for h in width:
-                    if h < 0:
+                    raise ValueError("Width and column must be the same length.")
+                for w in width:
+                    if w < 0:
                         raise ValueError('width cannot be negative')
             else:
                 if width < 0:
                     raise ValueError('width cannot be negative')
                 width = [width]*len(column)
-            self.write(f"""for r, h in zip({column}, {width}):\n"""+\
-                       f"""    sheet_{self.tag}.getColumns()[r].setPropertyValue('Width', h)""")
+            self.write(f"""for r, w in zip({column}, {width}):\n"""+\
+                       f"""    sheet_{self.tag}.getColumns()[r].setPropertyValue('Width', int(w))""")
         else:
-            column = _check_row_value(column)
+            column = _check_column_value(column)
             if width < 0:
                 raise ValueError('width cannot be negative')
-            self.write(f"sheet_{self.tag}.getColumns()[{column}].setPropertyValue('Width', {width})")
+            self.write(f"sheet_{self.tag}.getColumns()[{column}].setPropertyValue('Width', {int(width)})")
 
     def get_column_width(self, column):
         column = _check_column_value(column)
@@ -1465,10 +1483,8 @@ class Sheet():
             self.write(f"sheet_{self.tag}.getRows()[{row}].setPropertyValue('Height', {height})")
 
     def get_row_height(self, row):
-        row = _check_row_valuke(row)
+        row = _check_row_value(row)
         return int(self.write(f"print(sheet_{self.tag}.getRows()[{row}].Height)")[0])
-
-
 
     def set_value(self, *args, **kwargs):
         isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=['value'], opt_args=['format'])
@@ -1497,9 +1513,11 @@ class Sheet():
         if isRange == True:
             if c[2] - c[0] != len(value[0])-1 or c[3] - c[1] != len(value)-1:
                 raise ValueError('cell range does not match data/value size.')
-            it = iter(value)
-            if not all(len(l) == len(next(it)) for l in it):
-                 raise ValueError('data/value is not a square matrix.')
+
+            if len(value) > 1:
+                if sum((len(value[0]) - len(v) for v in value)) != 0:
+                    raise ValueError('all columns/rows must have the same length.')
+
             if format == 'formula':
                 self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).setFormulaArray({value})")
             elif format == 'string':
@@ -1529,11 +1547,11 @@ class Sheet():
             raise ValueError('missing range/cell')
         elif isRange == True:
             if format == 'formula':
-                return list(eval(self.write(f"print(sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).getFormulaArray())")[0]))
+                return list(list(x) for x in eval(self.write(f"print(sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).getFormulaArray())")[0]))
             elif format == 'string':
-                return list(eval(self.write(f"print(sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).getDataArray())")[0]))
+                return list(list(x) for x in eval(self.write(f"print(sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).getDataArray())")[0]))
             elif format == 'number':
-                return list(eval(self.write(f"print(sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).getDataArray())")[0]))
+                return list(list(x) for x in eval(self.write(f"print(sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).getDataArray())")[0]))
             else:
                 raise ValueError(f"{format} is not a valid format (valid formats: 'formula', 'string', 'number').")
         elif isRange == False:
@@ -1550,225 +1568,107 @@ class Sheet():
             else:
                 raise ValueError(f"{format} is not a valid format (valid formats: 'formula', 'string', 'number').")
 
-    def set_row(self, *args, **kwargs):
-        """
-        row
-        value
+    def clear(self, *args, **kwargs):
+        isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=[], opt_args=[])
 
-        row
-        value
-        format
-
-        row
-        value
-        column_start
-
-        row
-        value
-        column_start
-        format
-        """
-        format = 'formula'
-        column_start = 0
-
-        if len(args) == 2:
-            row_start = args[0]
-            value = args[1]
-
-        elif len(args) == 3:
-            row_start = args[0]
-            value  = args[1]
-            if args[2] in ['formula', 'string', 'number']:
-                format = args[2]
+        if isRange == -1:
+            if query_yes_no('No cell/range was given. Wish to clear all data?', 'no'):
+                c = (0, 0, self.get_last_column(), self.get_last_row())
+                isRange = True
             else:
-                column_start = args[2]
+                return
+        if isRange == True:
+            value = [['']*(c[2]-c[0]+1)]*(c[3]-c[1]+1)
+            self.set_value(c[0], c[1], c[2], c[3], value)
+        elif isRange == False:
+            self.set_value(c[0], c[1], '')
 
-        elif len(args) == 4:
-            row_start = args[0]
-            value = args[1]
-            column_start = args[2]
-        elif len(args) == 5:
-            row_start = args[0]
-            value = args[1]
-            column_start  = args[2]
-            format        = args[4]
+    def set_column(self, column, value, row_start=0, format='formula'):
+        if type(column) is str:
+            try:
+                column, row_start = cell2num(column)
+            except ValueError:
+                column = _check_column_value(column)
 
+        row_stop  = self.get_column_length(column)
+        try:
+            if len(value[0]) > 0 and type(value[0]) is not str:
+                pass
+            else:
+                value = transpose(value)
+        except TypeError:
+            value = transpose(value)
 
-        if 'column_start' in kwargs:
-            column_start = kwargs['column_start']
-        if 'row_start' in kwargs:
-            row_start = kwargs['row_start']
-        if 'row' in kwargs:
-            row_start = kwargs['row']
-        if 'value' in kwargs:
-            value = kwargs['value']
-        if 'format' in kwargs:
-            format = kwargs['format']
+        # clear
+        l = self.get_column_length(column)
+        row_stop = l if row_start < l else row_start
+        self.clear(column_start=column, row_start=row_start, column_stop=column, row_stop=row_stop)
 
-        return self.set_value(value=[value], column_start=column_start, row_start=row_start, format=format)
+        row_start = _check_row_value(row_start)
+        return self.set_value(value=value, column_start=column, column_stop=column, row_start=row_start, row_stop=row_start + len(value)- 1, format=format)
 
-    def get_row(self, *args, **kwargs):
+    def get_column(self, column, row_start=0, format='string'):
         """
-        row
-
-        row
-        format
-
-        row
-        column_start
-        column_stop
-
-        row
-        column_start
-        column_stop
-        format
         """
-        format = 'string'
-        column_start = 0
+        if type(column) is str:
+            try:
+                column, row_start = cell2num(column)
+            except ValueError:
+                column = _check_column_value(column)
 
-        if len(args) == 1:
-            row_start = args[0]
-        elif len(args) == 2:
-            row_start = args[0]
-            format    = args[1]
-        elif len(args) == 3:
-            row_start = args[0]
-            column_start = args[1]
-            column_stop = args[2]
-        elif len(args) == 4:
-            row_start = args[0]
-            column_start  = args[1]
-            column_stop   = args[2]
-            format        = args[3]
+        row_stop  = self.get_column_length(column)-1
+        return transpose(self.get_value(column_start=column, column_stop=column, row_start=row_start, row_stop=row_stop, format=format))[0]
 
-
-        if 'column_start' in kwargs:
-            column_start = kwargs['column_start']
-        if 'row_start' in kwargs:
-            row_start = kwargs['row_start']
-        if 'row' in kwargs:
-            row_start = kwargs['row']
-        if 'column_stop' in kwargs:
-            column_stop = kwargs['column_stop']
-        if 'format' in kwargs:
-            format = kwargs['format']
+    def set_row(self, row, value, column_start=0, format='formula'):
+        if type(row) is str:
+            try:
+                column_start, row = cell2num(row)
+            except ValueError:
+                row = _check_row_value(row)
 
         try:
-            type(column_stop)
-        except NameError:
-            column_stop  = self.get_row_length(_check_row_value(row_start)) -1
-
-        return self.get_cells(column_start=column_start, column_stop=column_stop, row_start=row_start, row_stop=row_start, format=format)
-
-    def set_column(self, *args, **kwargs):
-        """
-        column
-        value
-
-        column
-        value
-        format
-
-        column
-        value
-        row_start
-
-        column
-        value
-        row_start
-        format
-        """
-        format = 'formula'
-        row_start = 0
-
-        if len(args) == 2:
-            column_start = args[0]
-            value = args[1]
-        elif len(args) == 3:
-            column_start = args[0]
-            value  = args[1]
-            if args[2] in ['formula', 'string', 'number']:
-                format = args[2]
+            if len(value[0]) > 0 and type(value[0]) is not str:
+                pass
             else:
-                row_start = args[2]
-        elif len(args) == 4:
-            column_start = args[0]
-            value     = args[1]
-            row_start = args[2]
-            format    = args[3]
+                value = [value]
+        except TypeError:
+           value = [value]
 
-        if 'column_start' in kwargs:
-            column_start = kwargs['column_start']
-        if 'column' in kwargs:
-            column_start = kwargs['column']
-        if 'row_start' in kwargs:
-            row_start = kwargs['row_start']
-        if 'value' in kwargs:
-            value = kwargs['value']
-        if 'format' in kwargs:
-            format = kwargs['format']
 
-        if isinstance(value, list):
-            for v in value:
-                if not isinstance(v, list):
-                    value = transpose(value)
-                    break
-        else:
-            raise TypeError('value must be a list or a list of lists or a numpy array')
+        column_start = _check_column_value(column_start)
+        l = self.get_row_length(row)
+        column_stop = l if column_start < l else column_start
+        self.clear(column_start=column_start, row_start=row, column_stop=column_stop, row_stop=row)
+        return self.set_value(value=value, column_start=column_start, column_stop=column_start + len(value[0])-1, row_start=row, row_stop=row, format=format)
 
-        return self.set_cells(value=value, column_start=column_start, row_start=row_start, format=format)
-
-    def get_column(self, *args, **kwargs):
+    def get_row(self, row, column_start=0, format='string'):
         """
-        column
-
-        column
-        format
-
-        column
-        row_start
-        row_stop
-
-        column
-        row_start
-        row_stop
-        format
         """
-        format = 'string'
-        row_start = 0
+        if type(row) is str:
+            try:
+                column_start, row = cell2num(row)
+            except ValueError:
+                row = _check_row_value(row)
 
-        if len(args) == 1:
-            column_start = args[0]
-        elif len(args) == 2:
-            column_start = args[0]
-            format    = args[1]
-        elif len(args) == 3:
-            column_start = args[0]
-            row_start = args[1]
-            row_stop = args[2]
-        elif len(args) == 4:
-            column_start = args[0]
-            row_start  = args[1]
-            row_stop   = args[2]
-            format     = args[3]
+        column_stop  = self.get_row_length(row)-1
+        return self.get_value(column_start=column_start, column_stop=column_stop, row_start=row, row_stop=row, format=format)[0]
 
-        if 'column_start' in kwargs:
-            column_start = kwargs['column_start']
-        if 'column' in kwargs:
-            column_start = kwargs['column']
-        if 'row_start' in kwargs:
-            row_start = kwargs['row_start']
-        if 'row_stop' in kwargs:
-            row_stop = kwargs['row_stop']
-        if 'format' in kwargs:
-            format = kwargs['format']
+    def merge(self, *args, **kwargs):
+        isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=[], opt_args=[])
+        if isRange == True:
+            self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).merge(True)")
+        elif isRange == False or isRange == -1:
+            raise ValueError('no range to merge')
 
-        try:
-            type(row_stop)
-        except NameError:
-            row_stop  = self.get_column_length(_check_column_value(column_start)) -1
+    def unmerge(self, *args, **kwargs):
+        isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=[], opt_args=[])
+        if isRange == True:
+            self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).merge(False)")
+        elif isRange == False or isRange == -1:
+            raise ValueError('no range to unmerge')
 
-        return self.get_cells(column_start=column_start, column_stop=column_start, row_start=row_start, row_stop=row_stop, format=format)
+
+
 
     def cell_properties(self, *args, **kwargs):
         isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=[], opt_args=[])
@@ -1776,7 +1676,7 @@ class Sheet():
         if isRange == -1:
             return eval(self.write(f"print([x.Name for x in sheet_{self.tag}.getCellByPosition(0, 0).getPropertySetInfo().Properties])")[0])
         else:
-            return eval(self.write(f"print([x.Name for x in sheet_{self.tag}.getCellByPosition({C[0]}, {C[1]}).getPropertySetInfo().Properties])")[0])
+            return eval(self.write(f"print([x.Name for x in sheet_{self.tag}.getCellByPosition({c[0]}, {c[1]}).getPropertySetInfo().Properties])")[0])
 
     def _get_property_function(self, column, row, name):
 
@@ -1839,7 +1739,7 @@ class Sheet():
             if func is None:
                 raise ValueError(f'Property name given ({name}) has a dot (.), which mean it is a nested property, but actual property is not nested.')
             else:
-                d = self.get_cell_property(c[0], c[1], name0)
+                d = self.get_property(c[0], c[1], name0)
                 if name1 in d:
                     d[name1] = value
                 else:
@@ -1872,9 +1772,9 @@ class Sheet():
         if isRange == -1:
             raise ValueError('missing range/cell')
         elif isRange == True:
-            t = self.write(f"print(type(get_cells_property_recursively({self.tag}, {c[0]}, {c[1]}, {c[2]}, {c[2]}, '{name}')))")[0]
+            t = self.write(f"print(type(get_cells_property_recursively({self.tag}, {c[0]}, {c[1]}, {c[2]}, {c[3]}, '{name}')))")[0]
             try:
-                output = self.write(f"print(get_cells_property_recursively({self.tag}, {c[0]}, {c[1]}, {c[2]}, {c[2]}, '{name}'))")[0]
+                output = self.write(f"print(get_cells_property_recursively({self.tag}, {c[0]}, {c[1]}, {c[2]}, {c[3]}, '{name}'))")[0]
             except IndexError:
                 return None
         elif isRange == False:
@@ -1893,24 +1793,10 @@ class Sheet():
         else:
             return output
 
-    def merge(self, *args, **kwargs):
-        isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=[], opt_args=[])
-        if isRange == True:
-            self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).merge(True)")
-        elif isRange == False or isRange == -1:
-            raise ValueError('no range to merge')
-
-    def unmerge(self, *args, **kwargs):
-        isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=[], opt_args=[])
-        if isRange == True:
-            self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).merge(False)")
-        elif isRange == False or isRange == -1:
-            raise ValueError('no range to unmerge')
-
     def remove_conditional_format(self, *args, **kwargs):
         isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=[], opt_args=['range_index', 'index'])
 
-        if 'index' in opt:
+        if opt['index'] is not None:
             if isRange == -1:
                 d = self.get_conditional_formats()
                 for r in d[range_index]['Ranges']:
@@ -1929,6 +1815,10 @@ class Sheet():
                 raise valueError('range not defined.')
         else:
             if isRange == -1:
+                if opt['range_index'] is None:
+                    raise ValueError('range (or range_index) not defined.')
+                else:
+                    range_index = opt['range_index']
                 d = self.get_conditional_formats()
                 for r in d[range_index]['Ranges']:
                     self.write(f"""cf = sheet_{self.tag}.getCellRangeByPosition({r[0]}, {r[1]}, {r[2]}, {r[3]}).ConditionalFormat\n"""+\
@@ -2000,15 +1890,14 @@ class Sheet():
             else:
                 req['Operator'] = Operator
         req['Formula1'] = str(req['Formula1'])
-        if 'Formula2' in opt:
-            opt['Formula2'] = str(opt['Formula2'])
+        if opt['Formula2'] is not None:
+             Formula2 = str(opt['Formula2'])
         else:
-            opt['Formula2'] = '0'
+            Formula2 = '0'
 
 
         Opertor = req['Operator']
         Formula1 = req['Formula1']
-        Formula2 = req['Formula2']
         StyleName = req['StyleName']
         if isRange == -1:
             if 'index_range' not in opt:
