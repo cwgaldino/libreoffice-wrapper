@@ -51,7 +51,7 @@ def start_soffice(port=8100, folder='/opt/libreoffice7.0', nodefault=True, nores
 
     # tmux server
     if tmux_config:
-        tmux_server = libtmux.Server(config_file='tmux.conf')
+        tmux_server = libtmux.Server(config_file=str(Path(os.path.dirname(__file__))/'tmux.conf'))
     else:
         tmux_server = libtmux.Server()
 
@@ -259,6 +259,28 @@ def transpose(l):
     except ValueError:
         return [[x] for x in l]
 
+def chunk(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+def partitionate(value, max_string=4000, i=1):
+    # find i
+    while len(str(value)) > max_string:
+        i += 1
+
+        if i >= len(value):
+            raise ValueError(f'It seemns like length of rows are too big. Try setting shorter rows at a time and/or setting shorter data (less characters)')
+
+        g = chunk(value, int(len(value)/i))
+        while True:
+            try:
+                if len(str(next(g))) > max_string:
+                    return partitionate(value, max_string=max_string, i=i)
+            except StopIteration:
+                break
+        return chunk(value, int(len(value)/i))
+    return chunk(value, int(len(value)/i))
+
 def _parse_args(args, kwargs, req_args=[], opt_args=[]):
     """
     opt_args must be given in kwargs
@@ -407,7 +429,7 @@ class soffice():
 
         # tmux server
         if tmux_config:
-            self.tmux_server = libtmux.Server(config_file='tmux.conf')
+            self.tmux_server = libtmux.Server(config_file=str(Path(os.path.dirname(__file__))/'tmux.conf'))
         else:
             self.tmux_server = libtmux.Server()
 
@@ -501,7 +523,7 @@ class soffice():
                     print('Killing this process will close (without saving) the following opened files')
                     while hasMoreElements:
                         self.write("document = documents.nextElement()")
-                        print(self.write(f"print(document.getImplementationName()") + ': ' + self.write(f"document.getTitle())")[0])
+                        print(self.write(f"print(document.getImplementationName())") + ': ' + self.write(f"document.getTitle())")[0])
                         hasMoreElements = str2bool(self.write("print(documents.hasMoreElements())")[0])
                 if query_yes_no('Continue?', 'no'):
                     self.tmux_server.kill_server()
@@ -541,18 +563,31 @@ class soffice():
                     output = self.tmux_pane.capture_pane(starting_line)
                 if starting_line<-max_output:
                     raise valueError(f'output seems to be bigger than max_output {max_output}.')
+
                 i = output[::-1].index('>>> ' + keys2send.split('\n')[0])
-                if output[-i+2] == 'calc-ERROR':
+                if 'calc-ERROR' in output[-i:]:
                     f = output[::-1].index('>>>')
-                    raise soffice_python_error('\n'.join(output[-i+3:-1+f]))
-                elif output[-i+2].startswith('...'):
-                    if output[-i+3] == 'calc-ERROR':
-                        f = output[::-1].index('>>>')
-                        raise soffice_python_error('\n'.join(output[-i+4:-1+f]))
-                    else:
-                        return output[-i+3:-1]
+                    # try:
+                    #     i = output[::-1].index('.calc-ERROR')
+                    # except ValueError:
+                        # i = [i for i, s in enumerate(output[-i::-1]) if 'calc-ERROR' in s][0]
+                    raise soffice_python_error('\n'.join(output[-i:-1+f]))
                 else:
                     return output[-i+2:-1]
+
+                # i = output[::-1].index('>>> ' + keys2send.split('\n')[0])
+                # if output[-i+2] == 'calc-ERROR':
+                #     f = output[::-1].index('>>>')
+                #     raise soffice_python_error('\n'.join(output[-i+3:-1+f]))
+                # elif output[-i+2].startswith('...'):
+                #     if output[-i+3] == 'calc-ERROR':
+                #         f = output[::-1].index('>>>')
+                #         raise soffice_python_error('\n'.join(output[-i+4:-1+f]))
+                #     else:
+                #         return output[-i+3:-1]
+                # else:
+                #     return output[-i+2:-1]
+
         raise TimeoutError(f'timeout: {timeout}s. Process is still running.')
 
     def read(self, timeout=10, max_output=1000):
@@ -1372,33 +1407,35 @@ class Sheet():
 
     def get_last_row(self):
         """starts from 0"""
-        return int(self.write(f"""row_name = sheet_{self.tag}.getRowDescriptions()[-1]\n"""+\
+        l = self.write(f"""row_name = sheet_{self.tag}.getRowDescriptions()[-1]\n"""+\
                            f"""idx = int(row_name.split()[-1])\n"""+\
                            f"""visible = False\n"""+\
                            f"""while visible == False:\n"""+\
                            f"""    visible = sheet_{self.tag}.getRows()[idx].IsVisible\n"""+\
                            f"""    idx += 1\n"""+\
-                           f"""print(idx-2)""")[-1])
+                           f"""print(idx-2)""")[-1]
+        return int(l)
 
     def get_last_column(self):
         """starts from 0"""
-        return int(self.write(f"""col_name = sheet_{self.tag}.getColumnDescriptions()[-1]\n"""+\
+        l = self.write(f"""col_name = sheet_{self.tag}.getColumnDescriptions()[-1]\n"""+\
                            f"""idx = int(_letter2num(col_name.split()[-1]))\n"""+\
                            f"""visible = False\n"""+\
                            f"""while visible == False:\n"""+\
                            f"""    visible = sheet_{self.tag}.getColumns()[idx+1].IsVisible\n"""+\
                            f"""    idx += 1\n"""+\
-                           f"""print(idx-1)""")[-1])
+                           f"""print(idx-1)""")[-1]
+        return int(l)
 
     def get_row_length(self, row):
         row = _check_row_value(row)
-        return int(self.write(f"""row_name = sheet_{self.tag}.getRowDescriptions()[-1]\n"""+\
-                           f"""idx = int(row_name.split()[-1])\n"""+\
+        l = self.write(f"""row_name = sheet_{self.tag}.getColumnDescriptions()[-1]\n"""+\
+                           f"""idx = int(_letter2num(col_name.split()[-1]))\n"""+\
                            f"""visible = False\n"""+\
                            f"""while visible == False:\n"""+\
-                           f"""    visible = sheet_{self.tag}.getRows()[idx].IsVisible\n"""+\
+                           f"""    visible = sheet_{self.tag}.getColumns()[idx+1].IsVisible\n"""+\
                            f"""    idx += 1\n"""+\
-                           f"""lc = idx-2\n"""+\
+                           f"""lc = idx-1\n"""+\
                            f"""if len(sheet_{self.tag}.getCellRangeByPosition(0, {row}, lc, {row}).queryEmptyCells()) == 0:\n"""+\
                            f"""    row_length = lc+1\n"""+\
                            f"""else:\n"""+\
@@ -1408,11 +1445,12 @@ class Sheet():
                            f"""        row_length = sheet_{self.tag}.getCellRangeByPosition(0, {row}, lc, {row}).queryEmptyCells()[-1].RangeAddress.StartColumn\n"""+\
                            f"""    else:\n"""+\
                            f"""        row_length = lc + 1\n"""+\
-                           f"""print(row_length)""")[-1])
+                           f"""print(row_length)""")[-1]
+        return int(l)
 
     def get_column_length(self, column):
         column = _check_column_value(column)
-        return int(self.write(f"""row_name = sheet_{self.tag}.getRowDescriptions()[-1]\n"""+\
+        l = self.write(f"""row_name = sheet_{self.tag}.getRowDescriptions()[-1]\n"""+\
                            f"""idx = int(row_name.split()[-1])\n"""+\
                            f"""visible = False\n"""+\
                            f"""while visible == False:\n"""+\
@@ -1428,7 +1466,8 @@ class Sheet():
                            f"""        column_length = sheet_{self.tag}.getCellRangeByPosition({column}, 0, {column}, lr).queryEmptyCells()[-1].RangeAddress.StartRow\n"""+\
                            f"""    else:\n"""+\
                            f"""        column_length = lr + 1\n"""+\
-                           f"""print(column_length)""")[-1])
+                           f"""print(column_length)""")[-1]
+        return int(l)
 
     def set_column_width(self, column, width):
         """column can be single value or list
@@ -1487,6 +1526,11 @@ class Sheet():
         return int(self.write(f"print(sheet_{self.tag}.getRows()[{row}].Height)")[0])
 
     def set_value(self, *args, **kwargs):
+        """
+        value has no maximum number of rows.
+        value limits the number of columns.
+        The maximum number of columns is determined by the length of the values in each cell (number of characters).
+        """
         isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=['value'], opt_args=['format'])
         value = req['value']
 
@@ -1518,12 +1562,23 @@ class Sheet():
                 if sum((len(value[0]) - len(v) for v in value)) != 0:
                     raise ValueError('all columns/rows must have the same length.')
 
+
+            # deal with big columns
+            value = [list(x) for x in value]
+            g = partitionate(value)
+            self.write(f"""value = {next(g)}""")
+            while True:
+                try:
+                    self.write(f"""value.extend({next(g)})""")
+                except StopIteration:
+                    break
+
             if format == 'formula':
-                self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).setFormulaArray({value})")
+                self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).setFormulaArray(value)")
             elif format == 'string':
-                self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).setDataArray({value})")
+                self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).setDataArray(value)")
             elif format == 'number':
-                self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).setDataArray({value})")
+                self.write(f"sheet_{self.tag}.getCellRangeByPosition({c[0]}, {c[1]}, {c[2]}, {c[3]}).setDataArray(value)")
             else:
                 raise ValueError(f"{format} is not a valid format (valid formats: 'formula', 'string', 'number').")
         elif isRange == False:
@@ -1590,7 +1645,6 @@ class Sheet():
             except ValueError:
                 column = _check_column_value(column)
 
-        row_stop  = self.get_column_length(column)
         try:
             if len(value[0]) > 0 and type(value[0]) is not str:
                 pass
@@ -1599,12 +1653,13 @@ class Sheet():
         except TypeError:
             value = transpose(value)
 
+        row_start = _check_row_value(row_start)
+
         # clear
         l = self.get_column_length(column)
         row_stop = l if row_start < l else row_start
         self.clear(column_start=column, row_start=row_start, column_stop=column, row_stop=row_stop)
 
-        row_start = _check_row_value(row_start)
         return self.set_value(value=value, column_start=column, column_stop=column, row_start=row_start, row_stop=row_start + len(value)- 1, format=format)
 
     def get_column(self, column, row_start=0, format='string'):
@@ -1652,6 +1707,32 @@ class Sheet():
 
         column_stop  = self.get_row_length(row)-1
         return self.get_value(column_start=column_start, column_stop=column_stop, row_start=row, row_stop=row, format=format)[0]
+
+    def clear_column(self, column, row_start=0):
+        if type(column) is str:
+            try:
+                column, row_start = cell2num(column)
+            except ValueError:
+                column = _check_column_value(column)
+
+        row_start = _check_row_value(row_start)
+
+        # clear
+        l = self.get_column_length(column)
+        row_stop = l if row_start < l else row_start
+        self.clear(column_start=column, row_start=row_start, column_stop=column, row_stop=row_stop)
+
+    def clear_row(self, row, column_start=0):
+        if type(row) is str:
+            try:
+                column_start, row = cell2num(row)
+            except ValueError:
+                row = _check_row_value(row)
+
+        column_start = _check_column_value(column_start)
+        l = self.get_row_length(row)
+        column_stop = l if column_start < l else column_start
+        self.clear(column_start=column_start, row_start=row, column_stop=column_stop, row_stop=row)
 
     def merge(self, *args, **kwargs):
         isRange, c, req, opt = _parse_args(args=args, kwargs=kwargs, req_args=[], opt_args=[])

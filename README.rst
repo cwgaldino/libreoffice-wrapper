@@ -272,6 +272,20 @@ Most functionality regarding Calc spreadsheets can be found in the example below
   sheet.set_row_height(['2', '3'], [1000, 1000])
   sheet.set_row_height([1, 2], 452)
 
+  # clear cells
+  # sheet.clear()
+  # sheet.clear('F1')
+  # sheet.clear('F1:G1')
+  # sheet.clear('F2', 'G2')
+  # sheet.clear('F', '3', 'G', '3')
+  # sheet.clear(5, 3, 6, 3)
+  # sheet.clear_row(13)
+  # sheet.clear_row('B13')
+  # sheet.clear_row(13, column_start='B')
+  # sheet.clear_column('B')
+  # sheet.clear_column('B2')
+  # sheet.clear_column('B', row_start='2')
+
   # merge
   sheet.merge('F1:G1')
   sheet.merge('F2', 'G2')
