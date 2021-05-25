@@ -91,19 +91,352 @@ calc.save()
 # %%
 def load_data(self, x, y, sigma=None):
     if len(x) == len(y):
-        self.set_column(column='R', value=x, row_start='3')
-        self.set_column(column='S', value=y, row_start='3')
+        self.set_column(column='P', value=x, row_start='2')
+        self.set_column(column='Q', value=y, row_start='2')
     else:
         raise ValueError('x and y must have the same length')
     if sigma is not None:
         if len(x) == len(sigma):
-            self.set_column(column='T', value=sigma, row_start='3')
+            self.set_column(column='R', value=sigma, row_start='2')
         else:
             raise ValueError('x and sigma must have the same length')
+    else:
+        sigma = [1]*len(x)
+        self.set_column(column='R', value=sigma, row_start='2')
 
+def get_x(self):
+    return self.get_column('P', row_start='2')
+
+def get_y(self):
+    return self.get_column('Q', row_start='2')
+
+def get_sigma(self):
+    return self.get_column('R', row_start='2')
+
+def get_data(self):
+    length = self.get_column_length('P')
+    return np.array(self.get_value('P', '2', 'R', length-1, format='number'))
+
+def set_range2fit(self, value=None, global_sigma=None):
+    """Build a sigma array which determines the uncertainty in ydata.
+
+    Adaptaded from the `scipy.optimize.curve_fit() <https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html>`_ documentation:
+
+        If we define residuals as ``r = ydata - model(xdata, *popt)``, then sigma
+        for a 1-D data should contain values of standard deviations of errors in
+        ydata. In this case, the optimized function is ``chisq = sum((r / sigma) ** 2)``.
+
+    Args:
+        x (list): x array.
+        sigma (float, optional): sigma value to be used for all points in ``x``.
+        sigma_specific (list, optional): list of triples specfing new sigma for specific ranges, e.g.,
+            ``sigma_specific = [[x_init, x_final, sigma], [x_init2, x_final2, sigma2], ]``.
+
+    Returns:
+        array.
+    """
+    if global_sigma is not None:
+        self.set_value('N1', value=global_sigma, format='number')
+
+    length = self.get_column_length('L')
+    if length > 6:
+        self.clear('L', '7', 'N', length-1)
+
+    if value is not None:
+        try:
+            for i, sigma in enumerate(value):
+                if len(sigma) == 2:
+                    sigma.append(1)
+                if len(sigma) != 3:
+                    raise ValueError(f'{sigma} is not a valid data range.')
+            self.set_value(row='7', value=value, column='L')
+        except TypeError:
+            if len(value) == 2:
+                value.append(1)
+            if len(value) != 3:
+                raise ValueError(f'{value} is not a valid data range.')
+            self.set_value(row='7', value=[value], column='L')
+
+def get_range2fit(self):
+    length = self.get_column_length('L')
+    if length == 6:
+        return None
+    else:
+        return self.get_value('L', '7', 'N', length-1)
+
+def set_global_sigma(self, value):
+    self.set_value('N3', value=value)
+
+def get_global_sigma(self):
+    return self.get_value('N3', format='number')
+
+def get_submodels(self):
+    length = self.get_column_length('B')
+    data = self.get_value('A', 1, 'I', length-1)
+
+    submodels = {}
+    for i, row in enumerate(data):
+        name, arg, use, vary, bound_min, guess, bound_max, fitted, error = row[0:9]
+
+        if use == 'y':
+            if name not in submodels:
+                submodels[name] = dict()
+            if arg not in submodels[name]:
+                submodels[name][arg] = dict()
+
+            submodels[name][arg]['use'] = use
+            submodels[name][arg]['vary'] = vary
+
+            if bound_min != '':
+                submodels[name][arg]['min'] = float(bound_min)
+            else:
+                submodels[name][arg]['min'] = -np.inf
+
+            if bound_min != '':
+                submodels[name][arg]['max'] = float(bound_max)
+            else:
+                submodels[name][arg]['max'] = np.inf
+
+            try:
+                submodels[name][arg]['guess'] = float(guess)
+            except ValueError:
+                submodels[name][arg]['guess'] = guess
+
+            try:
+                submodels[name][arg]['fitted'] = float(fitted)
+                submodels[name][arg]['error'] = float(error)
+            except ValueError:
+                submodels[name][arg]['fitted'] = [0]*length
+                submodels[name][arg]['error'] = [0]*length
+            submodels[name][arg]['row'] = i
+
+    return submodels
+
+def get_model(self):
+    submodels = self.get_submodels(self)
+    var_string = ''
+    model_string = ''
+    p_guess = []
+    p_min = []
+    p_max = []
+    p = 0
+    for name in submodels:
+        model_string += f"{name.split('#')[0]}(x, "
+        for arg in submodels[name]:
+            if submodels[name][arg]['vary'] == 'y':
+                if type(submodels[name][arg]['guess']) is str:
+                    name2 = submodels[name][arg]['guess'].split('_')[0]
+                    arg2 = submodels[name][arg]['guess'].split('_')[1]
+                    p2 = submodels[name2][arg2]['p']
+                    submodels[name][arg]['p'] = p2
+                    model_string += f'{arg}=p{p2}, '
+                else:
+                    var_string   += f'p{p}, '
+                    model_string += f'{arg}=p{p}, '
+                    p_guess.append(submodels[name][arg]['guess'])
+                    p_min.append(submodels[name][arg]['min'])
+                    p_max.append(submodels[name][arg]['max'])
+                    submodels[name][arg]['p'] = p
+                    p += 1
+            else:
+                value = submodels[name][arg]['guess']
+                model_string += f'{arg}={value}, '
+        model_string += ') + '
+    model_string = f'lambda x, {var_string[:-2]}: {model_string[:-3]}'
+    model = eval(model_string)
+    return model, model_string, submodels, p_guess, p_min, p_max
+
+def fit(self, save_final=True, save_partial_guess=False, save_partial_fit=False, print_time=True):
+    if print_time: start_time = time.time()
+    length = self.get_column_length('A')
+
+    # data
+    data = self.get_data(self)
+    r_raw = self.get_range2fit(self)
+    if r_raw is not None:
+        r = [(x, y) for x, y, s in r_raw]
+        x, y     = am.extract(data[:, 0], data[:, 1], ranges=r)
+        _, sigma = am.extract(data[:, 0], data[:, 2], ranges=r)
+    else:
+        x = data[:, 0]
+        y = data[:, 1]
+        sigma = data[:, 2]
+
+    # remove zero sigmas
+    x2fit = np.array([x1 for x1, s in zip(x, sigma) if s != 0])
+    y2fit = np.array([y1 for y1, s in zip(y, sigma) if s != 0])
+    sigma = np.array([s for s in sigma if s != 0])
+
+    # sigma
+    global_sigma = self.get_global_sigma(self)
+    sigma = global_sigma*sigma
+    if global_sigma != 0:
+        for s in r_raw:
+            init = index(x, s[0])
+            final = index(x, s[1])
+            sigma[init:final+1] = sigma[init:final+1]*s[2]
+
+    # get model, guess, bounds
+    model, _, submodels, p_guess, p_min, p_max = self.get_model(self)
+    y_guess = model(x2fit, *p_guess)
+
+    # fit
+    if print_time: start_time2 = time.time()
+    p_fitted, p_cov = curve_fit(model, x2fit, y2fit, p_guess, sigma=sigma, bounds=[p_min, p_max])
+    p_error = np.sqrt(np.diag(p_cov))  # One standard deviation errors on the parameters
+    if print_time: elapsed_time2 = time.time() - start_time2
+
+    # fitted values back to the spreadsheet
+    p_fitted2 = [['', '']]*length
+    # j = 0
+    for name in submodels:
+        for arg in submodels[name]:
+            if submodels[name][arg]['vary'] == 'y':
+                if type(submodels[name][arg]['guess']) is str:
+                    name2 = submodels[name][arg]['guess'].split('_')[0]
+                    arg2 = submodels[name][arg]['guess'].split('_')[1]
+                    p2 = submodels[name2][arg2]['p']
+                    p_fitted2[submodels[name][arg]['row']] = [p_fitted[p2], p_error[p2]]
+                else:
+                    p = submodels[name][arg]['p']
+                    p_fitted2[submodels[name][arg]['row']] = [p_fitted[p], p_error[p]]
+                    # j += 1
+            else:
+                p_fitted2[submodels[name][arg]['row']] = [submodels[name][arg]['guess'], 0]
+    self.set_value('H', '2', 'I', length, value=p_fitted2)
+    y_fitted = model(x2fit, *p_fitted)
+
+    # get residue
+    residue = trapz(abs(y2fit - model(x2fit, *p_fitted)), x2fit)
+    self.set_value('N1', residue)
+
+    # submodels fitted curves
+    sub_fitted = []
+    for name in submodels:
+        string = 'lambda x: '+ name.split('#')[0] + '(x, '
+        for arg in submodels[name]:
+            p = p = submodels[name2][arg2]['p']
+            value = p_fitted[p]
+            string += arg + '=' + str(value) + ', '
+        string += ')'
+        s = eval(string)
+        sub_fitted.append(s(x2fit))
+
+    # submodels guessed curves
+    sub_guess = []
+    for name in submodels:
+        string = 'lambda x: '+ name.split('#')[0] + '(x, '
+        for arg in submodels[name]:
+            p = p = submodels[name2][arg2]['p']
+            value = p_guess[p]
+            string += arg + '=' + str(value) + ', '
+        string += ')'
+        s = eval(string)
+        sub_guess.append(s(x2fit))
+
+    # clear old curves
+    l = self.get_row_length('1')
+    if l < 19: l = 19
+    self.clear('T', '1', l, self.get_column_length('T'))
+
+    # curves
+    data_final = []
+    data_final.append(x2fit)
+    data_final.append(y2fit)
+    data_final.append(sigma)
+    data_final.append(y_guess)
+    data_final.append(y_fitted)
+
+    partial_guess = []
+    partial_guess.append(x2fit)
+    for s in sub_guess:
+        partial_guess.append(s)
+
+    partial_fitted = []
+    partial_fitted.append(x2fit)
+    for s in sub_fitted:
+        partial_fitted.append(s)
+
+    # save curves
+    column = 19
+    if save_final or save_partial_guess or save_partial_fit:
+        self.set_value(column, '1', column+5-1, '1', value=[['x2fit', 'y2fit', 'sigma', 'y guess', 'y fit']])
+        data2save = copy.copy(data_final)
+
+    column = 24
+    if save_partial_guess:
+        self.set_value(column, '1', column+len(submodels)-1, '1', value=[[key+'_guess' for key in submodels.keys()]])
+        column += len(partial_guess)-1
+        for d in partial_guess[1:]:
+            data2save.append(d)
+
+    if save_partial_fit:
+        self.set_value(column, '1', column+len(submodels)-1, '1', value=[[key+'_fit' for key in submodels.keys()]])
+        for d in partial_fitted[1:]:
+            data2save.append(d)
+
+    if print_time: start_time3 = time.time()
+    if save_final or save_partial_guess or save_partial_fit:
+        self.set_value(19, '2', 19+len(data2save)-1, len(data2save[0]), value=lw.transpose(data2save))
+    if print_time: elapsed_time3 = time.time() - start_time3
+
+    if print_time:
+        elapsed_time = time.time() - start_time
+        print(f'fit elapsed time: {elapsed_time2}')
+        print(f'save data elapsed time: {elapsed_time3}')
+        print(f'other elapsed time: {elapsed_time-elapsed_time2-elapsed_time3}')
+        print(f'total elapsed time: {elapsed_time}')
+    return model, p_fitted, p_error, np.array(data_final), np.array(partial_guess), np.array(partial_fitted)
+
+
+# %%
 def refresh():
-
     importlib.reload(sys.modules[__name__])
+
+sheet.load_data = load_data
+sheet.get_x = get_x
+sheet.get_y = get_y
+sheet.get_sigma = get_sigma
+sheet.get_data = get_data
+sheet.set_range2fit = set_range2fit
+sheet.get_range2fit = get_range2fit
+sheet.set_global_sigma = set_global_sigma
+sheet.get_global_sigma = get_global_sigma
+sheet.fit = fit
+sheet.get_submodels = get_submodels
+sheet.get_model = get_model
+
+bkg2 = lambda x, d0: d0 + 0*x
+
+# sheet.set_global_sigma(sheet, value=10**-10)
+# sheet.set_range2fit(sheet, value=[300, 700, 1])
+# sheet.set_range2fit(sheet)
+# sheet.get_submodels(sheet)
+# sheet.get_model(sheet)
+# model, p_fitted, p_error, data_final, partial_guess, partial_fitted = sheet.fit(sheet, save_final=False)
+# model, p_fitted, p_error, data_final, partial_guess, partial_fitted = sheet.fit(sheet)
+# model, p_fitted, p_error, data_final, partial_guess, partial_fitted = sheet.fit(sheet, save_partial_guess=True)
+# model, p_fitted, p_error, data_final, partial_guess, partial_fitted = sheet.fit(sheet, save_partial_fit=True)
+model, p_fitted, p_error, data_final, partial_guess, partial_fitted = sheet.fit(sheet, save_partial_guess=True, save_partial_fit=True)
+
+
+
+
+
+# %%
+start_time = time.time()
+f = sheet.get_value('A1:AF6000')
+elapsed_time = time.time() - start_time
+print(elapsed_time)
+
+start_time = time.time()
+f = sheet.get_value('A1:AF1')
+f = sheet.get_value('A1:AF1')
+f = sheet.get_value('A1:AF1')
+elapsed_time = time.time() - start_time
+print(elapsed_time)
+
+
 
 # %%
 importlib.reload(lw)
@@ -114,11 +447,17 @@ soffice = lw.soffice()
 calc = soffice.Calc('fit.ods')
 sheet = calc.get_sheet_by_position(1)
 sheet.load_data = load_data
+
 data = fm.load_data('example/data/00_Co3O2BO3_15K.dat')
-# x, y = am.extract(data['rshift'], data['intensity'], [0, 50])
 x, y = data['rshift'], data['intensity']
-x[1]
 sheet.load_data(sheet, x, y)
+
+calc = soffice.Calc('fit.ods')
+sheet = calc.get_sheet_by_position(1)
+sheet.set_sigma = set_sigma
+sheet.set_sigma(sheet, global_sigma=10**-12, sigma_specific=[[14, 16, 2]])
+
+
 
 # x = data['rshift']
 # x = np.array([1,2,3])
@@ -135,178 +474,6 @@ sheet.set_value(value=x2, column_start=17, column_stop=17, row_start=2, row_stop
 
 
 
-def chunk(lst, n):
-    for i in range(0, len(lst), n):
-        yield lst[i:i + n]
-
-
-value = [x[0:500]]
-
-# fix rows
-i = 1
-string_length = len(str(value[0]))
-while string_length > 1000:
-    i += 1
-    g = chunk(value, int(len(value)/i))
-    value2 = next(g)
-    string_length = len(str(value2))
-
-sheet.write(f"""value = {value2}""")
-while True:
-    try:
-        sheet.write(f"""value.extend({next(g)})""")
-    except StopIteration:
-        break
-sheet.write("""sheet_5.getCellRangeByPosition(0, 13, 2+len(value)-1, 13).setFormulaArray(value)""")
-
-
-
-
-value = lw.transpose(x[0:500])
-
-# fix columns
-i = 1
-string_length = len(str(value))
-while string_length > 1000:
-    i += 1
-    g = chunk(value, int(len(value)/i))
-    value2 = next(g)
-    string_length = len(str(value2))
-    if i > len(value):
-        raise ValueError('Length of rows are too big. Try setting less columns at a time.')
-
-sheet.write(f"""value = {value2}""")
-while True:
-    try:
-        sheet.write(f"""value.extend({next(g)})""")
-    except StopIteration:
-        break
-
-sheet.write("""sheet_5.getCellRangeByPosition(17, 2, 17, 2+len(value)-1).setFormulaArray(value)""")
-
-
-
-
-
-# %%
-
-def chunk(lst, n):
-    for i in range(0, len(lst), n):
-        yield lst[i:i + n]
-
-def partitionate(value, max_string=4000, i=1):
-    # find i
-    while len(str(value)) > max_string:
-        i += 1
-
-        if i > len(value):
-            raise ValueError(f'It seemns like length of rows are too big ({i}). Try setting less columns at a time and/or shorter data (less characters)')
-
-        g = chunk(value, int(len(value)/i))
-        while True:
-            try:
-                if len(str(next(g))) > max_string:
-                    return partitionate(value, max_string=max_string, i=i)
-            except StopIteration:
-                break
-
-        return chunk(value, int(len(value)/i))
-
-    return chunk(value, int(len(value)/i))
-# %%
-
-max_string = 25
-value = lw.transpose(x[0:500])
-value = lw.transpose(x[0:6])
-print(value)
-len(str(value))
-a=chunk(value, 2)
-next(a)
-len(str(next(a)))
-max_string = 2000
-a=partitionate(value, max_string)
-print(value)
-next(a)
-
-len(a)
-len(str(a[0]))
-
-
-
-    sheet.write(f"""value = {value2}""")
-    while True:
-        try:
-            sheet.write(f"""value.extend({next(g)})""")
-        except StopIteration:
-            break
-
-
-
-
-
-# fix columns
-i = 1
-flag = True
-string_length = len(str(value))
-# while string_length > 1000:
-
-
-def partitionate(value, flag=True):
-    final = []
-    if len(str(value)) > 40:
-        a = partitionate(value[:int(len(value)/2)])
-        b = partitionate(value[int(len(value)/2):])
-        return [x for x in a]
-        # return [partitionate(value[:int(len(value)/2)]), partitionate(value[int(len(value)/2):])]
-    else:
-        return value
-
-
-value = lw.transpose(x[0:12])
-a=partitionate(value)
-len(a)
-len(str(a[0]))
-
-len(str(value[:int(len(value)/2)]))
-
-    if i > len(value):
-        raise ValueError('Length of rows are too big. Try setting less columns at a time.')
-
-while True:
-    try:
-    except StopIteration:
-        break
-
-sheet.write("""sheet_5.getCellRangeByPosition(17, 2, 17, 2+len(value)-1).setFormulaArray(value)""")
-
-
-
-
-
-
-
-
-
-
-
-sheet.set_value(value=x2, column_start=17, column_stop=17, row_start=2, row_stop=2 + len(x2)- 1, format='formula')
-
-# %%
-# soffice.kill()
-
-exec("""sheet_3.getCellRangeByPosition(17, 2, 17, 370).setFormulaArray([[13.5527], [13.8821], [14.2095]
-, [14.5367], [14.864], [15.1913], [15.5186], [15.8458], [16.173], [16.5003], [16.8275], [17.1547], [17.4819], [17.809], [18.1362], [18.4634], [18.7905], [19.1176], [19.4448], [19.7719], [20.1011], [20.4282], [20.7553], [21.0823], [21.4094], [21.7364], [22.0635], [22.3905], [22.7175], [23.0445], [23.3715], [23.6985], [24.0254], [24.3524], [24.6793], [25.0062], [25.3331], [25.6601], [25.9869], [26.3138], [26.6407], [26.9676], [27.2944], [27.6212], [27.9481], [28.2727], [28.5995], [28.9263], [29.2531], [29.5799], [29.9066], [30.2334], [30.5601], [30.8868], [31.2135], [31.5402], [31.8669], [32.1936], [32.5203], [32.8469], [33.1736], [33.5002], [33.8268], [34.1513], [34.4779], [34.8045], [35.1311], [35.4576], [35.7842], [36.1107], [36.4372], [36.7638], [37.0903], [37.4168], [37.7432], [38.0676], [38.394], [38.7205], [39.0469], [39.3733], [39.6998], [40.0262], [40.3526], [40.6768], [41.0032], [41.3295], [41.6559], [41.9822], [42.3085], [42.6348], [42.9611], [43.2853], [43.6116], [43.9378], [44.2641], [44.5903], [44.9166], [45.2428], [45.5669], [45.8931], [46.2193], [46.5454], [46.8716], [47.1978], [47.5218], [47.8479], [48.174], [48.5001], [48.8262], [49.1502], [49.4762], [49.8023], [50.1284], [50.4544], [50.7783], [51.1043], [51.4303], [51.7563], [52.0823], [52.4061], [52.7321], [53.058], [53.384], [53.7099], [54.0337], [54.3596], [54.6855], [55.0114], [55.3351], [55.6609], [55.9868], [56.3126], [56.6363], [56.9621], [57.2879], [57.6137], [57.9374], [58.2631], [58.5889], [58.9146], [59.2382], [59.564], [59.8897], [60.2154], [60.5389], [60.8646], [61.1903], [61.5159], [61.8394], [62.1651], [62.4907], [62.8142], [63.1398], [63.4654], [63.7909], [64.1144], [64.4399], [64.7655], [65.0889], [65.4144], [65.7399], [66.0632], [66.3887], [66.7142], [67.0375], [67.363], [67.6884], [68.0117], [68.3371], [68.6625], [68.9858], [69.3112], [69.6366], [69.9598], [70.2851], [70.6105], [70.9337], [71.259], [71.5843], [71.9074], [72.2327], [72.558], [72.8811], [73.2064], [73.5295], [73.8547], [74.1799], [74.503], [74.8282], [75.1534], [75.4764], [75.8016], [76.1246], [76.4497], [76.7748], [77.0978], [77.4229], [77.7459], [78.071], [78.396], [78.7189], [79.044], [79.3669], [79.6919], [80.0169], [80.3398], [80.6648], [80.9876], [81.3126], [81.6354], [81.9604], [82.2853], [82.6081], [82.933], [83.2558], [83.5807], [83.9034], [84.2283], [84.551], [84.8758], [85.2007], [85.5234], [85.8482], [86.1708], [86.4956], [86.8183], [87.143], [87.4657], [87.7904], [88.113], [88.4377], [88.7603], [89.085], [89.4075], [89.7322], [90.0547], [90.3794], [90.7019], [91.0265], [91.349], [91.6736], [91.9961], [92.3207], [92.6431], [92.9677], [93.2901], [93.6147], [93.937], [94.2616], [94.5839], [94.9084], [95.2308], [95.5553], [95.8776], [96.202], [96.5244], [96.8466], [97.1711], [97.4933], [97.8177], [98.14], [98.4644], [98.7866], [99.1109], [99.4332], [99.7553], [100.08], [100.402], [100.726], [101.048], [101.373], [101.695], [102.017], [102.341], [102.663], [102.987], [103.309], [103.631], [103.956], [104.278], [104.602], [104.924], [105.246], [105.57], [105.892], [106.214], [106.538], [106.86], [107.184], [107.506], [107.828], [108.152], [108.474], [108.796], [109.12], [109.442], [109.766], [110.087], [110.409], [110.733], [111.055], [111.377], [111.701], [112.023], [112.344], [112.668], [112.99], [113.312], [113.635], [113.957], [114.279], [114.603], [114.924], [115.246], [115.568], [115.891], [116.213], [116.535], [116.858], [117.18], [117.502], [117.825], [118.147], [118.468], [118.79], [119.114], [119.435], [119.757], [120.08], [120.402], [120.723], [121.045], [121.368], [121.69], [122.011], [122.333], [122.656], [122.977], [123.299], [123.62], [123.944], [124.265], [124.586], [124.908], [125.231], [125.553], [125.874], [126.195], [126.518], [126.84], [127.161], [127.482], [127.803], [128.127], [128.448], [128.769], [129.09], [129.412], [129.735], [130.056], [130.377], [130.698], [131.019], [131.343], [131.664], [131.985], [132.306], [132.627], [132.95], [132.95], [132.95], [132.95], [132.95], [132.95], [132.95], [132.95], [132.95], [132.95], [132.95]])""")
-
-
-
-exec("""a=[[13.5527], [13.8821], [14.2095]
-, [14.5367], [14.864], [15.1913], [15.5186], [15.8458], [16.173], [16.5003], [16.8275], [17.1547], [17.4819], [17.809], [18.1362], [18.4634], [18.7905], [19.1176], [19.4448], [19.7719], [20.1011], [20.4282], [20.7553], [21.0823], [21.4094], [21.7364], [22.0635], [22.3905], [22.7175], [23.0445], [23.3715], [23.6985], [24.0254], [24.3524], [24.6793], [25.0062], [25.3331], [25.6601], [25.9869], [26.3138], [26.6407], [26.9676], [27.2944], [27.6212], [27.9481], [28.2727], [28.5995], [28.9263], [29.2531], [29.5799], [29.9066], [30.2334], [30.5601], [30.8868], [31.2135], [31.5402], [31.8669], [32.1936], [32.5203], [32.8469], [33.1736], [33.5002], [33.8268], [34.1513], [34.4779], [34.8045], [35.1311], [35.4576], [35.7842], [36.1107], [36.4372], [36.7638], [37.0903], [37.4168], [37.7432], [38.0676], [38.394], [38.7205], [39.0469], [39.3733], [39.6998], [40.0262], [40.3526], [40.6768], [41.0032], [41.3295], [41.6559], [41.9822], [42.3085], [42.6348], [42.9611], [43.2853], [43.6116], [43.9378], [44.2641], [44.5903], [44.9166], [45.2428], [45.5669], [45.8931], [46.2193], [46.5454], [46.8716], [47.1978], [47.5218], [47.8479], [48.174], [48.5001], [48.8262], [49.1502], [49.4762], [49.8023], [50.1284], [50.4544], [50.7783], [51.1043], [51.4303], [51.7563], [52.0823], [52.4061], [52.7321], [53.058], [53.384], [53.7099], [54.0337], [54.3596], [54.6855], [55.0114], [55.3351], [55.6609], [55.9868], [56.3126], [56.6363], [56.9621], [57.2879], [57.6137], [57.9374], [58.2631], [58.5889], [58.9146], [59.2382], [59.564], [59.8897], [60.2154], [60.5389], [60.8646], [61.1903], [61.5159], [61.8394], [62.1651], [62.4907], [62.8142], [63.1398], [63.4654], [63.7909], [64.1144], [64.4399], [64.7655], [65.0889], [65.4144], [65.7399], [66.0632], [66.3887], [66.7142], [67.0375], [67.363], [67.6884], [68.0117], [68.3371], [68.6625], [68.9858], [69.3112], [69.6366], [69.9598], [70.2851], [70.6105], [70.9337], [71.259], [71.5843], [71.9074], [72.2327], [72.558], [72.8811], [73.2064], [73.5295], [73.8547], [74.1799], [74.503], [74.8282], [75.1534], [75.4764], [75.8016], [76.1246], [76.4497], [76.7748], [77.0978], [77.4229], [77.7459], [78.071], [78.396], [78.7189], [79.044], [79.3669], [79.6919], [80.0169], [80.3398], [80.6648], [80.9876], [81.3126], [81.6354], [81.9604], [82.2853], [82.6081], [82.933], [83.2558], [83.5807], [83.9034], [84.2283], [84.551], [84.8758], [85.2007], [85.5234], [85.8482], [86.1708], [86.4956], [86.8183], [87.143], [87.4657], [87.7904], [88.113], [88.4377], [88.7603], [89.085], [89.4075], [89.7322], [90.0547], [90.3794], [90.7019], [91.0265], [91.349], [91.6736], [91.9961], [92.3207], [92.6431], [92.9677], [93.2901], [93.6147], [93.937], [94.2616], [94.5839], [94.9084], [95.2308], [95.5553], [95.8776], [96.202], [96.5244], [96.8466], [97.1711], [97.4933], [97.8177], [98.14], [98.4644], [98.7866], [99.1109], [99.4332], [99.7553], [100.08], [100.402], [100.726], [101.048], [101.373], [101.695], [102.017], [102.341], [102.663], [102.987], [103.309], [103.631], [103.956], [104.278], [104.602], [104.924], [105.246], [105.57], [105.892], [106.214], [106.538], [106.86], [107.184], [107.506], [107.828], [108.152], [108.474], [108.796], [109.12], [109.442], [109.766], [110.087], [110.409], [110.733], [111.055], [111.377], [111.701], [112.023], [112.344], [112.668], [112.99], [113.312], [113.635], [113.957], [114.279], [114.603], [114.924], [115.246], [115.568], [115.891], [116.213], [116.535], [116.858], [117.18], [117.502], [117.825], [118.147], [118.468], [118.79], [119.114], [119.435], [119.757], [120.08], [120.402], [120.723], [121.045], [121.368], [121.69], [122.011], [122.333], [122.656], [122.977], [123.299], [123.62], [123.944], [124.265], [124.586], [124.908], [125.231], [125.553], [125.874], [126.195], [126.518], [126.84], [127.161], [127.482], [127.803], [128.127], [128.448], [128.769], [129.09], [129.412], [129.735], [130.056], [130.377], [130.698], [131.019], [131.343], [131.664], [131.985], [132.306], [132.627], [132.95]]""")
-
-
-exec("""sheet_3.getCellRangeByPosition(17, 2, 17, 370).setFormulaArray(a)""")
-
-
-
 # %%
 last_col = 'L'
 header_row = 1
@@ -320,39 +487,6 @@ der_def     = dict(linewidth=0, marker='o', color='black')
 der_fit_def = dict(linewidth=2, color='red')
 der_guess_def = dict(linewidth=2, linestyle='--', color='green')
 sub_def     = dict(linewidth=1)
-
-
-def get_parameters(self,):
-    # self = sheet
-
-    # set # col
-    self.set_col_values(np.arange(0, self.get_last_row()-1), col=hashtag_col, row_start=header_row+1)
-
-    # get header and submodels
-    header = self.get_row_values(header_row, col_stop=last_col)
-    submodel_col = header.index('submodel')+1
-    arg_col = header.index('arg')+1
-    submodel_list = self.get_col_values(submodel_col)[1:]
-
-    self.parameters = dict()
-    for row_number, submodel in enumerate(submodel_list):
-        if submodel == '':
-            pass
-        else:
-            row_values = self.get_row_values(row_number+2, col_stop=last_col)
-            arg = row_values[arg_col-1]
-
-            try:
-                if arg in self.parameters[submodel]: # check for repeated parameter id's
-                    for key, value in self.parameters[submodel][arg].items():
-                        # if type(value) != list:
-                        #     value = [value]
-                        value.append(row_values[header.index(key)])
-                        self.parameters[submodel][arg][key] = value
-                else:
-                    self.parameters[submodel][arg]={header[col_number]: [value] for col_number, value in enumerate(row_values)}
-            except KeyError:
-                self.parameters[submodel] = {arg:{header[col_number]: [value] for col_number, value in enumerate(row_values)}}
 
 
 def update_model(self):
@@ -779,29 +913,3 @@ def plot_guess(self, x, y, ax=None, show_exp=True, show_derivative=False, show_s
                 ax.plot(x_smooth, self.submodel[submodel]['guess'](x_smooth) + bkg, **sub_def, color=color, label=submodel)
     plt.legend()
     return ax
-
-
-class MissingArgument(Exception):
-
-    # Constructor or Initializer
-    def __init__(self, submodel, arg):
-        self.submodel = submodel
-        self.arg = arg
-
-    # __str__ is to print() the value
-    def __str__(self):
-        msg = f"Submodel '{self.submodel}' is missing argument '{self.arg}'."
-        return(msg)
-
-sheet.get_parameters = get_parameters
-sheet.update_model = update_model
-sheet.update_submodels = update_submodels
-sheet.fit = fit
-sheet.plot_fit = plot_fit
-sheet.plot_guess = plot_guess
-
-
-try:
-    from __main__ import *
-except ImportError:
-    pass

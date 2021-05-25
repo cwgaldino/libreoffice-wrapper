@@ -346,12 +346,16 @@ def _parse_args(args, kwargs, req_args=[], opt_args=[]):
 
     if 'column' in kwargs:
         column_start = kwargs['column']
+        isRange = False
     if 'row' in kwargs:
         row_start = kwargs['row']
+        isRange = False
     if 'column_start' in kwargs:
         column_start = kwargs['column_start']
+        isRange = False
     if 'row_start' in kwargs:
         row_start = kwargs['row_start']
+        isRange = False
     if 'column_stop' in kwargs:
         column_stop = kwargs['column_stop']
         isRange = True
@@ -360,8 +364,10 @@ def _parse_args(args, kwargs, req_args=[], opt_args=[]):
         isRange = True
     if 'cell' in kwargs:
         column_start, row_start = cell2num(kwargs['cell'])
+        isRange = False
     if 'cell_start' in kwargs:
         column_start, row_start = cell2num(kwargs['cell_start'])
+        isRange = False
     if 'cell_stop' in kwargs:
         column_stop, row_stop = cell2num(kwargs['cell_stop'])
         isRange = True
@@ -523,7 +529,7 @@ class soffice():
                     print('Killing this process will close (without saving) the following opened files')
                     while hasMoreElements:
                         self.write("document = documents.nextElement()")
-                        print(self.write(f"print(document.getImplementationName())") + ': ' + self.write(f"document.getTitle())")[0])
+                        print(self.write(f"print(document.getImplementationName())")[0] + ': ' + self.write(f"document.getTitle()")[0])
                         hasMoreElements = str2bool(self.write("print(documents.hasMoreElements())")[0])
                 if query_yes_no('Continue?', 'no'):
                     self.tmux_server.kill_server()
@@ -1429,7 +1435,7 @@ class Sheet():
 
     def get_row_length(self, row):
         row = _check_row_value(row)
-        l = self.write(f"""row_name = sheet_{self.tag}.getColumnDescriptions()[-1]\n"""+\
+        l = self.write(f"""col_name = sheet_{self.tag}.getColumnDescriptions()[-1]\n"""+\
                            f"""idx = int(_letter2num(col_name.split()[-1]))\n"""+\
                            f"""visible = False\n"""+\
                            f"""while visible == False:\n"""+\
